@@ -8,6 +8,7 @@ defmodule CahWeb.Router do
     plug :put_root_layout, html: {CahWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug CahWeb.Plugs.PlayerId
   end
 
   pipeline :api do
@@ -18,11 +19,6 @@ defmodule CahWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    live "/thermostat", ThermostatLive
-    live "/posts", PostLive.Index, :index
-    live "/posts/new", PostLive.Form, :new
-    live "/posts/:id", PostLive.Show, :show
-    live "/posts/:id/edit", PostLive.Form, :edit
     live "/cah", CahLive
   end
 
