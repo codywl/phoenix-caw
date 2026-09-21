@@ -19,7 +19,7 @@ config :cah, CahWeb.Endpoint,
     formats: [html: CahWeb.ErrorHTML, json: CahWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Cah.PubSub,
+  pubsub_server: :cah_pubsub,
   live_view: [signing_salt: "8P8nofYk"]
 
 # Configure the mailer

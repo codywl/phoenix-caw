@@ -11,7 +11,8 @@ defmodule Cah.Application do
       CahWeb.Telemetry,
       Cah.Repo,
       {DNSCluster, query: Application.get_env(:cah, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Cah.PubSub},
+      {Phoenix.PubSub, name: :cah_pubsub},
+      Cah.CahServer,
       # Start a worker by calling: Cah.Worker.start_link(arg)
       # {Cah.Worker, arg},
       # Start to serve requests, typically the last entry
