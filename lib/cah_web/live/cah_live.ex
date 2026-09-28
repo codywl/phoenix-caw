@@ -14,32 +14,52 @@ defmodule CahWeb.CahLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <form phx-submit="join">
-      <input type="text" name="player_name" />
-      <.button type="submit">Join</.button>
-    </form>
+    <div class="main-content max-w-96 p-4">
+      <ul class="">
+        <h2>Players</h2>
+        <div class="divider"></div>
+        <li :for={player <- @players}>{player.name}</li>
+      </ul>
+      <form phx-submit="join">
+        <input type="text" class="input" name="player_name" placeholder="Player name" />
+      </form>
 
-    <ul>
-      <li :for={player <- @players}>{player}</li>
-    </ul>
+      <%= if @role == :host and @phase == :lobby do %>
+        <form phx-submit="start">
+          <.button>Start Game</.button>
+        </form>
+      <% end %>
+    </div>
     """
   end
 
   @impl true
-  def mount(_params, _session, socket) do
-    PubSub.subscribe(:cah_pubsub, @topic)
-    {:ok, role} = CahServer.join(self())
-    {:ok, assign(socket, players: [])}
+  # runs twice, once for the render and then again over the websocket
+  # subscribes and reconnects (things that involve self()) only go into the second of those
+  # since the first render and the second render both need players, CahServer.players() runs on both
+  def mount(_params, %{"player_id" => player_id}, socket) do
+    role =
+      if connected?(socket) do
+        PubSub.subscribe(:cah_pubsub, @topic)
+
+        case CahServer.reconnect(player_id, self()) do
+          {:ok, role} -> role
+          :error -> nil
+        end
+      end
+
+    %{players: players, phase: phase} = CahServer.game_state()
+    {:ok, assign(socket, player_id: player_id, role: role, players: players, phase: phase)}
   end
 
   @impl true
   def handle_event("join", %{"player_name" => player_name}, socket) do
-    PubSub.broadcast(:cah_pubsub, @topic, {:user_update, %{name: player_name}})
-    {:noreply, socket}
+    {:ok, role} = CahServer.join(socket.assigns.player_id, self(), player_name)
+    {:noreply, assign(socket, role: role)}
   end
 
   @impl true
-  def handle_info({:user_update, %{name: player_name}}, socket) do
-    {:noreply, assign(socket, players: socket.assigns.players ++ [player_name])}
+  def handle_info({:players, players, :phase, phase}, socket) do
+    {:noreply, assign(socket, :game_state, %{players: players, phase: phase})}
   end
 end
