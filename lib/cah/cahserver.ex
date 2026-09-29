@@ -43,10 +43,24 @@ defmodule Cah.CahServer do
   end
 
   @impl true
-  def handle_call({:start_game, player}, _, state) do
+  def handle_call({:start_game, player_id}, _, state) do
+    is_host = state.host == player_id
+    has_enough_players = map_size(state.players) > 2
+
     cond do
-      Map.get(state, :host) ->
-        IO.inspect(state)
+      is_host and has_enough_players ->
+        state =
+          Enum.reduce(Map.keys(state.players), state, fn id, state -> draw(state, id, 10) end)
+
+        state = %{state | phase: :playing}
+        broadcast_state(state)
+        {:reply, :ok, state}
+
+      is_host ->
+        {:reply, {:error, :insufficient_players}, state}
+
+      true ->
+        {:reply, {:error, :not_host}, state}
     end
   end
 
@@ -74,7 +88,6 @@ defmodule Cah.CahServer do
 
     state = %{state | players: players}
     state = if is_new?, do: draw(state, player_id, 10), else: state
-    IO.inspect(state)
 
     {role, state} = attach(state, player_id, pid)
     {:reply, {:ok, role}, state}
@@ -105,14 +118,26 @@ defmodule Cah.CahServer do
     {:noreply, remove_player(state, player_id)}
   end
 
-  defp draw(state, player_id, n) do
-    {drawn_cards, _} = Enum.split(state.white_deck, n)
-
-    Map.update!(state.players, player_id, fn player ->
-      %{player | hand: player.hand ++ drawn_cards}
-    end)
+  defp send_hand(state, player_id) do
+    case Map.get(state.players, player_id) do
+      %{pid: pid, hand: hand} when is_pid(pid) -> send(pid, {:hand, hand})
+      _ -> :ok
+    end
   end
 
+  defp draw(state, player_id, n) do
+    {drawn_cards, rest} = Enum.split(state.white_deck, n)
+
+    players =
+      Map.update!(state.players, player_id, fn player ->
+        %{player | hand: player.hand ++ drawn_cards}
+      end)
+
+    %{state | players: players, white_deck: rest}
+    send_hand(state, player_id)
+  end
+
+  # Common logic for :join, :reconnect signals
   defp attach(state, player_id, pid) do
     players =
       Map.update!(state.players, player_id, fn player -> %{player | pid: pid, connected: true} end)
@@ -124,6 +149,7 @@ defmodule Cah.CahServer do
     state = %{state | players: players, monitors: monitors, host: host}
 
     broadcast_state(state)
+    send_hand(state, player_id)
     {role, state}
   end
 

@@ -29,6 +29,13 @@ defmodule CahWeb.CahLive do
           <.button>Start Game</.button>
         </form>
       <% end %>
+
+      <%= if @phase == :playing do %>
+        <span>playing</span>
+        <ul>
+          <li :for={card <- @hand}>{Cah.Cards.text(card)}</li>
+        </ul>
+      <% end %>
     </div>
     """
   end
@@ -49,7 +56,9 @@ defmodule CahWeb.CahLive do
       end
 
     %{players: players, phase: phase} = CahServer.game_state()
-    {:ok, assign(socket, player_id: player_id, role: role, players: players, phase: phase)}
+
+    {:ok,
+     assign(socket, player_id: player_id, role: role, players: players, phase: phase, hand: [])}
   end
 
   @impl true
@@ -59,7 +68,18 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
-  def handle_info({:players, players, :phase, phase}, socket) do
-    {:noreply, assign(socket, :game_state, %{players: players, phase: phase})}
+  def handle_event("start", _params, socket) do
+    CahServer.start_game(socket.assigns.player_id)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:game_state, %{:players => players, :phase => phase}}, socket) do
+    {:noreply, assign(socket, players: players, phase: phase)}
+  end
+
+  @impl true
+  def handle_info({:hand, hand}, socket) do
+    {:noreply, assign(socket, hand: hand)}
   end
 end
