@@ -32,8 +32,11 @@ defmodule CahWeb.CahLive do
 
       <%= if @phase == :playing do %>
         <span>playing</span>
+        <div>
+          {Cah.Cards.text(@black_card.id)}
+        </div>
         <ul>
-          <li :for={card <- @hand}>{Cah.Cards.text(card)}</li>
+          <li :for={card <- @hand} class="cah-card">{Cah.Cards.text(card)}</li>
         </ul>
       <% end %>
     </div>
@@ -55,10 +58,17 @@ defmodule CahWeb.CahLive do
         end
       end
 
-    %{players: players, phase: phase} = CahServer.game_state()
+    %{players: players, phase: phase, black_card: black_card} = CahServer.game_state()
 
     {:ok,
-     assign(socket, player_id: player_id, role: role, players: players, phase: phase, hand: [])}
+     assign(socket,
+       player_id: player_id,
+       role: role,
+       players: players,
+       phase: phase,
+       hand: [],
+       black_card: black_card
+     )}
   end
 
   @impl true
@@ -74,8 +84,11 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
-  def handle_info({:game_state, %{:players => players, :phase => phase}}, socket) do
-    {:noreply, assign(socket, players: players, phase: phase)}
+  def handle_info(
+        {:game_state, %{:players => players, :phase => phase, :black_card => black_card}},
+        socket
+      ) do
+    {:noreply, assign(socket, players: players, phase: phase, black_card: black_card)}
   end
 
   @impl true

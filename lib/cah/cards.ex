@@ -28,6 +28,10 @@ defmodule Cah.Cards do
     black_ids() |> Enum.shuffle()
   end
 
+  def black_spaces(card) do
+    card |> text |> String.count("_")
+  end
+
   def white_ids do
     Enum.map(0..(length(@white_cards) - 1), &{:white, &1})
   end

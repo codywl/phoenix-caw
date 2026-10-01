@@ -38,6 +38,7 @@ defmodule Cah.CahServer do
        monitors: %{},
        white_deck: Cah.Cards.deal_white(),
        black_deck: Cah.Cards.deal_black(),
+       black_card: nil,
        discard: []
      }}
   end
@@ -50,9 +51,18 @@ defmodule Cah.CahServer do
     cond do
       is_host and has_enough_players ->
         state =
-          Enum.reduce(Map.keys(state.players), state, fn id, state -> draw(state, id, 10) end)
+          Enum.reduce(Map.keys(state.players), state, fn id, state ->
+            if id != state.host do
+              draw(state, id, 10)
+            else
+              state
+            end
+          end)
 
-        state = %{state | phase: :playing}
+        [black_card | rest] = state.black_deck
+        black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
+
+        state = %{state | black_card: black_card, black_deck: rest, phase: :playing}
         broadcast_state(state)
         {:reply, :ok, state}
 
@@ -76,8 +86,6 @@ defmodule Cah.CahServer do
 
   @impl true
   def handle_call({:join, player_id, pid, name}, _, state) do
-    is_new? = not Map.has_key?(state.players, player_id)
-
     players =
       Map.put_new(state.players, player_id, %{
         name: name,
@@ -87,7 +95,6 @@ defmodule Cah.CahServer do
       })
 
     state = %{state | players: players}
-    state = if is_new?, do: draw(state, player_id, 10), else: state
 
     {role, state} = attach(state, player_id, pid)
     {:reply, {:ok, role}, state}
@@ -133,8 +140,9 @@ defmodule Cah.CahServer do
         %{player | hand: player.hand ++ drawn_cards}
       end)
 
-    %{state | players: players, white_deck: rest}
+    state = %{state | players: players, white_deck: rest}
     send_hand(state, player_id)
+    state
   end
 
   # Common logic for :join, :reconnect signals
@@ -173,6 +181,7 @@ defmodule Cah.CahServer do
       end)
 
     lobby_phase = state.phase
-    %{players: players, phase: lobby_phase}
+    black_card = state.black_card
+    %{players: players, phase: lobby_phase, black_card: black_card}
   end
 end
