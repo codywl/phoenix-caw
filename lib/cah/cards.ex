@@ -20,6 +20,10 @@ defmodule Cah.Cards do
     Enum.at(@black_cards, i)
   end
 
+  def id({:white, i}) do
+    i
+  end
+
   def deal_white do
     white_ids() |> Enum.shuffle()
   end

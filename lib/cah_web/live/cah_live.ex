@@ -36,8 +36,16 @@ defmodule CahWeb.CahLive do
           {Cah.Cards.text(@black_card.id)}
         </div>
         <ul>
-          <li :for={card <- @hand} class="cah-card">{Cah.Cards.text(card)}</li>
+          <li
+            :for={card <- @hand}
+            phx-click="select_card"
+            phx-value-card={Cah.Cards.id(card)}
+            class="cah-card"
+          >
+            {Cah.Cards.text(card)}
+          </li>
         </ul>
+        <button phx-click="submit_cards">Submit</button>
       <% end %>
     </div>
     """
@@ -81,6 +89,37 @@ defmodule CahWeb.CahLive do
   def handle_event("start", _params, socket) do
     CahServer.start_game(socket.assigns.player_id)
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("select_card", %{"card" => card_id}, socket) do
+    case Integer.parse(card_id) do
+      {int, _} ->
+        card = {:white, int}
+
+        selected =
+          cond do
+            card in socket.assigns.selected ->
+              List.delete(socket.assigns.selected, card_id)
+
+            length(socket.assigns.selected) < socket.assigns.black_card.picks ->
+              socket.assigns.selected ++ [{:white, card_id}]
+
+            true ->
+              socket.assigns.selected
+          end
+
+        {:noreply, assign(socket, selected: selected)}
+
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("submit_cards", _params, socket) do
+    CahServer.submit(socket.assigns.player_id, socket.assigns.selected)
+    {:noreply, assign(socket, selected: [])}
   end
 
   @impl true

@@ -28,6 +28,10 @@ defmodule Cah.CahServer do
     GenServer.call(__MODULE__, {:start_game, player})
   end
 
+  def submit(player_id, cards) do
+    GenServer.call(__MODULE__, {:submit, player_id, cards})
+  end
+
   @impl true
   def init(_) do
     {:ok,
@@ -44,6 +48,42 @@ defmodule Cah.CahServer do
   end
 
   @impl true
+  def handle_call({:submit, player_id, cards}, _, state) do
+    # see if player has the cards submitted
+    # see if the number of cards submitted is valid
+    player = Map.get(state.players, player_id)
+
+    cond do
+      player == nil ->
+        {:reply, {:error, :no_player}, state}
+
+      state.phase != :submitting ->
+        {:reply, {:error, :wrong_phase}, state}
+
+      length(cards) != state.black_card.picks ->
+        {:reply, {:error, :invalid_card_count}, state}
+
+      length(Enum.uniq(cards)) != length(cards) ->
+        {:reply, {:error, :duplicate_whites}, state}
+
+      not Enum.all?(cards, &(&1 in player.hand)) ->
+        {:reply, {:error, :not_in_hand}, state}
+
+      true ->
+        this_cards = player.hand -- cards
+
+        players =
+          Map.update!(state.players, player_id, fn player ->
+            %{player | hand: this_cards}
+          end)
+
+        state = %{state | players: players}
+        broadcast_state(state)
+        {:reply, :ok, state}
+    end
+  end
+
+  @impl true
   def handle_call({:start_game, player_id}, _, state) do
     is_host = state.host == player_id
     has_enough_players = map_size(state.players) > 2
@@ -52,11 +92,7 @@ defmodule Cah.CahServer do
       is_host and has_enough_players ->
         state =
           Enum.reduce(Map.keys(state.players), state, fn id, state ->
-            if id != state.host do
-              draw(state, id, 10)
-            else
-              state
-            end
+            draw(state, id, 10)
           end)
 
         [black_card | rest] = state.black_deck
