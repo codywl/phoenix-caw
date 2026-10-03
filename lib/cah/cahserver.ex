@@ -43,14 +43,14 @@ defmodule Cah.CahServer do
        white_deck: Cah.Cards.deal_white(),
        black_deck: Cah.Cards.deal_black(),
        black_card: nil,
-       discard: []
+       discard: [],
+       submissions: %{},
+       czar: nil
      }}
   end
 
   @impl true
   def handle_call({:submit, player_id, cards}, _, state) do
-    # see if player has the cards submitted
-    # see if the number of cards submitted is valid
     player = Map.get(state.players, player_id)
 
     cond do
@@ -69,15 +69,22 @@ defmodule Cah.CahServer do
       not Enum.all?(cards, &(&1 in player.hand)) ->
         {:reply, {:error, :not_in_hand}, state}
 
+      Map.has_key?(state.submissions, player_id) ->
+        {:reply, {:error, :already_submitted}, state}
+
       true ->
-        this_cards = player.hand -- cards
+        remaining_cards = player.hand -- cards
 
         players =
           Map.update!(state.players, player_id, fn player ->
-            %{player | hand: this_cards}
+            %{player | hand: remaining_cards}
           end)
 
-        state = %{state | players: players}
+        submissions = Map.put_new(state.submissions, player_id, cards)
+
+        state = %{state | players: players, submissions: submissions}
+        state = maybe_progress(state)
+
         broadcast_state(state)
         {:reply, :ok, state}
     end
@@ -98,7 +105,8 @@ defmodule Cah.CahServer do
         [black_card | rest] = state.black_deck
         black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
 
-        state = %{state | black_card: black_card, black_deck: rest, phase: :playing}
+        czar = Enum.random(Map.keys(state.players))
+        state = %{state | black_card: black_card, black_deck: rest, phase: :playing, czar: czar}
         broadcast_state(state)
         {:reply, :ok, state}
 
@@ -161,6 +169,16 @@ defmodule Cah.CahServer do
     {:noreply, remove_player(state, player_id)}
   end
 
+  defp maybe_progress(state) do
+    expected_size = Enum.count(state.players, fn {id, p} -> p.connected and id != state.czar end)
+
+    if expected_size == map_size(state.submissions) do
+      %{state | phase: :judging}
+    else
+      state
+    end
+  end
+
   defp send_hand(state, player_id) do
     case Map.get(state.players, player_id) do
       %{pid: pid, hand: hand} when is_pid(pid) -> send(pid, {:hand, hand})
@@ -218,6 +236,7 @@ defmodule Cah.CahServer do
 
     lobby_phase = state.phase
     black_card = state.black_card
-    %{players: players, phase: lobby_phase, black_card: black_card}
+    czar = state.czar
+    %{players: players, phase: lobby_phase, black_card: black_card, czar: czar}
   end
 end
