@@ -86,6 +86,7 @@ defmodule Cah.CahServer do
         state = maybe_progress(state)
 
         broadcast_state(state)
+        send_hand(state, player_id)
         {:reply, :ok, state}
     end
   end
@@ -106,7 +107,15 @@ defmodule Cah.CahServer do
         black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
 
         czar = Enum.random(Map.keys(state.players))
-        state = %{state | black_card: black_card, black_deck: rest, phase: :playing, czar: czar}
+
+        state = %{
+          state
+          | black_card: black_card,
+            black_deck: rest,
+            phase: :submitting,
+            czar: czar
+        }
+
         broadcast_state(state)
         {:reply, :ok, state}
 

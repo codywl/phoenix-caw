@@ -4,10 +4,6 @@ defmodule CahWeb.CahLive do
   alias Cah.CahServer
 
   @topic "cah:game"
-  # things needed:
-  # players
-  # cards for players
-  # tracking card czar
   # tracking score
   # deciding win score
   # passing control to players
@@ -30,7 +26,7 @@ defmodule CahWeb.CahLive do
         </form>
       <% end %>
 
-      <%= if @phase == :playing do %>
+      <%= if @phase == :submitting do %>
         <span>playing</span>
         <div>
           {Cah.Cards.text(@black_card.id)}
@@ -46,6 +42,10 @@ defmodule CahWeb.CahLive do
           </li>
         </ul>
         <button phx-click="submit_cards">Submit</button>
+      <% end %>
+
+      <%= if @phase == :judging do %>
+        <h1>judging phase</h1>
       <% end %>
     </div>
     """
@@ -66,7 +66,7 @@ defmodule CahWeb.CahLive do
         end
       end
 
-    %{players: players, phase: phase, black_card: black_card} = CahServer.game_state()
+    %{players: players, phase: phase, black_card: black_card, czar: czar} = CahServer.game_state()
 
     {:ok,
      assign(socket,
@@ -75,7 +75,9 @@ defmodule CahWeb.CahLive do
        players: players,
        phase: phase,
        hand: [],
-       black_card: black_card
+       black_card: black_card,
+       czar: czar,
+       selected: []
      )}
   end
 
@@ -100,10 +102,10 @@ defmodule CahWeb.CahLive do
         selected =
           cond do
             card in socket.assigns.selected ->
-              List.delete(socket.assigns.selected, card_id)
+              List.delete(socket.assigns.selected, card)
 
             length(socket.assigns.selected) < socket.assigns.black_card.picks ->
-              socket.assigns.selected ++ [{:white, card_id}]
+              socket.assigns.selected ++ [card]
 
             true ->
               socket.assigns.selected
@@ -124,10 +126,11 @@ defmodule CahWeb.CahLive do
 
   @impl true
   def handle_info(
-        {:game_state, %{:players => players, :phase => phase, :black_card => black_card}},
+        {:game_state,
+         %{:players => players, :phase => phase, :black_card => black_card, :czar => czar}},
         socket
       ) do
-    {:noreply, assign(socket, players: players, phase: phase, black_card: black_card)}
+    {:noreply, assign(socket, players: players, phase: phase, black_card: black_card, czar: czar)}
   end
 
   @impl true
