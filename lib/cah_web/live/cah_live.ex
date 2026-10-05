@@ -10,15 +10,19 @@ defmodule CahWeb.CahLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <Layouts.flash_group flash={@flash} />
     <div class="main-content max-w-96 p-4">
       <ul class="">
         <h2>Players</h2>
         <div class="divider"></div>
         <li :for={player <- @players}>{player.name}</li>
       </ul>
-      <form phx-submit="join">
-        <input type="text" class="input" name="player_name" placeholder="Player name" />
-      </form>
+      <%= if @role == nil do %>
+        <form phx-submit="join">
+          <input type="text" class="input" name="player_name" placeholder="Player name" />
+        </form>
+      <% end %>
 
       <%= if @role == :host and @phase == :lobby do %>
         <form phx-submit="start">
@@ -26,35 +30,50 @@ defmodule CahWeb.CahLive do
         </form>
       <% end %>
 
-      <%= if @player_id == @czar and @phase == :judging do %>
+      <%= if @phase == :judging do %>
         submitted cards
         <div :for={{cards, index} <- Enum.with_index(@submissions)}>
-          <button phx-click="pick_cards" phx-value-index={index}>
+          <button phx-click={@player_id == @czar && "pick_cards"} phx-value-index={index}>
             <span :for={card <- cards}>{Cah.Cards.text(card)}</span>
           </button>
         </div>
       <% end %>
 
-      <%= if @phase == :submitting do %>
-        <span>playing</span>
+      <%= if @phase == :submitting and @role != nil do %>
         <div>
-          {Cah.Cards.text(@black_card.id)}
+          <h1 class="text-2xl my-4">
+            {Cah.Cards.text(@black_card.id)}
+          </h1>
         </div>
-        <ul>
-          <li
-            :for={card <- @hand}
-            phx-click="select_card"
-            phx-value-card={Cah.Cards.id(card)}
-            class="cah-card"
-          >
-            {Cah.Cards.text(card)}
-          </li>
-        </ul>
-        <button phx-click="submit_cards">Submit</button>
-      <% end %>
-
-      <%= if @phase == :judging do %>
-        <h1>judging phase</h1>
+        <%= if @player_id != @czar and not get_self(assigns).submitted do %>
+          <ul class="flex gap-2 flex-wrap w-screen">
+            <li
+              :for={card <- @hand}
+              phx-click="select_card"
+              phx-value-card={Cah.Cards.id(card)}
+              class={["cah-card hover-3d", card in @selected && "selected"]}
+            >
+              <div class="text-xl h-46 w-72 p-2 rounded-sm bg-white text-black">
+                {Cah.Cards.text(card)}
+              </div>
+              <div />
+              <div />
+              <div />
+              <div />
+              <div />
+              <div />
+              <div />
+              <div />
+            </li>
+          </ul>
+          <button class="btn my-4" phx-click="submit_cards">Submit Cards</button>
+        <% else %>
+          <%= if @player_id == @czar do %>
+            Waiting for cards..
+          <% else %>
+            Waiting for other players..
+          <% end %>
+        <% end %>
       <% end %>
     </div>
     """
@@ -75,7 +94,13 @@ defmodule CahWeb.CahLive do
         end
       end
 
-    %{players: players, phase: phase, black_card: black_card, czar: czar} = CahServer.game_state()
+    %{
+      players: players,
+      phase: phase,
+      black_card: black_card,
+      czar: czar,
+      submissions: submissions
+    } = CahServer.game_state()
 
     {:ok,
      assign(socket,
@@ -86,7 +111,8 @@ defmodule CahWeb.CahLive do
        hand: [],
        black_card: black_card,
        czar: czar,
-       selected: []
+       selected: [],
+       submissions: submissions
      )}
   end
 
@@ -98,8 +124,10 @@ defmodule CahWeb.CahLive do
 
   @impl true
   def handle_event("start", _params, socket) do
-    CahServer.start_game(socket.assigns.player_id)
-    {:noreply, socket}
+    case CahServer.start_game(socket.assigns.player_id) do
+      :ok -> {:noreply, socket}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, message_for(reason))}
+    end
   end
 
   @impl true
@@ -135,8 +163,14 @@ defmodule CahWeb.CahLive do
 
   @impl true
   def handle_event("pick_cards", %{"index" => index}, socket) do
-    CahServer.pick_cards(socket.assigns.player_id, index)
-    {:noreply, socket}
+    case Integer.parse(index) do
+      {int, _} ->
+        CahServer.pick_cards(socket.assigns.player_id, int)
+        {:noreply, socket}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -151,9 +185,15 @@ defmodule CahWeb.CahLive do
          }},
         socket
       ) do
+    role =
+      if Enum.any?(players, &(&1.id == socket.assigns.player_id)),
+        do: socket.assigns.role,
+        else: nil
+
     {:noreply,
      assign(socket,
        players: players,
+       role: role,
        phase: phase,
        black_card: black_card,
        czar: czar,
@@ -164,5 +204,22 @@ defmodule CahWeb.CahLive do
   @impl true
   def handle_info({:hand, hand}, socket) do
     {:noreply, assign(socket, hand: hand)}
+  end
+
+  defp message_for(reason) do
+    case reason do
+      :insufficient_players ->
+        "You must have at least three players to play."
+
+      :not_host ->
+        "You aren't the host."
+
+      _ ->
+        "Something went wrong."
+    end
+  end
+
+  defp get_self(assigns) do
+    Enum.find(assigns.players, &(&1.id == assigns.player_id))
   end
 end

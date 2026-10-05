@@ -336,7 +336,8 @@ defmodule Cah.CahServer do
           id: id,
           name: player.name,
           connected: player.connected,
-          submitted: Map.has_key?(state.submissions, id)
+          submitted: Map.has_key?(state.submissions, id),
+          score: player.score
         }
       end)
 
