@@ -32,6 +32,10 @@ defmodule Cah.CahServer do
     GenServer.call(__MODULE__, {:submit, player_id, cards})
   end
 
+  def pick_cards(player_id, index) do
+    GenServer.call(__MODULE__, {:pick_cards, player_id, index})
+  end
+
   @impl true
   def init(_) do
     {:ok,
@@ -45,7 +49,10 @@ defmodule Cah.CahServer do
        black_card: nil,
        discard: [],
        submissions: %{},
-       czar: nil
+       czar: nil,
+       reveal_order: [],
+       player_order: [],
+       target_score: 5
      }}
   end
 
@@ -139,15 +146,19 @@ defmodule Cah.CahServer do
 
   @impl true
   def handle_call({:join, player_id, pid, name}, _, state) do
+    is_new? = not Map.has_key?(state.players, player_id)
+
     players =
       Map.put_new(state.players, player_id, %{
         name: name,
         pid: nil,
         connected: false,
-        hand: []
+        hand: [],
+        score: 0
       })
 
-    state = %{state | players: players}
+    player_order = if is_new?, do: state.player_order ++ [player_id], else: state.player_order
+    state = %{state | players: players, player_order: player_order}
 
     {role, state} = attach(state, player_id, pid)
     {:reply, {:ok, role}, state}
@@ -156,6 +167,73 @@ defmodule Cah.CahServer do
   @impl true
   def handle_call(:game_state, _, state) do
     {:reply, public_state(state), state}
+  end
+
+  @impl true
+  def handle_call({:pick_cards, player_id, index}, _, state) do
+    cond do
+      state.czar != player_id ->
+        {:reply, {:error, :player_not_czar}, state}
+
+      state.phase != :judging ->
+        {:reply, {:error, :incorrect_phase}, state}
+
+      index < 0 or index >= length(state.reveal_order) ->
+        {:reply, {:error, :index_oob}, state}
+
+      true ->
+        winner_id = Enum.at(state.reveal_order, index)
+
+        players =
+          Map.update!(state.players, winner_id, fn player ->
+            %{player | score: player.score + 1}
+          end)
+
+        discard = state.discard ++ (state.submissions |> Map.values() |> List.flatten())
+
+        state = %{state | players: players, discard: discard}
+
+        state =
+          if state.players[winner_id].score >= state.target_score do
+            %{state | phase: :ended}
+          else
+            next_round(state)
+          end
+
+        broadcast_state(state)
+        {:reply, :ok, state}
+    end
+  end
+
+  defp next_round(state) do
+    state =
+      if state.black_deck == [] do
+        %{state | black_deck: Cah.Cards.deal_black()}
+      else
+        state
+      end
+
+    [black_card | rest] = state.black_deck
+    black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
+
+    state =
+      Enum.reduce(Map.keys(state.players), state, fn id, state ->
+        player = Map.get(state.players, id)
+        draw(state, id, 10 - length(player.hand))
+      end)
+
+    current_czar = Enum.find_index(state.player_order, &(&1 == state.czar))
+    new_czar = Enum.at(state.player_order, rem(current_czar + 1, length(state.player_order)))
+
+    %{
+      state
+      | submissions: %{},
+        reveal_order: [],
+        czar: new_czar,
+        black_card: black_card,
+        black_deck: rest,
+        phase: :submitting
+    }
   end
 
   @impl true
@@ -182,7 +260,8 @@ defmodule Cah.CahServer do
     expected_size = Enum.count(state.players, fn {id, p} -> p.connected and id != state.czar end)
 
     if expected_size == map_size(state.submissions) do
-      %{state | phase: :judging}
+      reveal_order = state.submissions |> Map.keys() |> Enum.shuffle()
+      %{state | phase: :judging, reveal_order: reveal_order}
     else
       state
     end
@@ -196,6 +275,13 @@ defmodule Cah.CahServer do
   end
 
   defp draw(state, player_id, n) do
+    state =
+      if length(state.white_deck) < n do
+        %{state | white_deck: state.white_deck ++ Enum.shuffle(state.discard), discard: []}
+      else
+        state
+      end
+
     {drawn_cards, rest} = Enum.split(state.white_deck, n)
 
     players =
@@ -225,7 +311,11 @@ defmodule Cah.CahServer do
   end
 
   defp remove_player(state, player_id) do
-    %{state | players: Map.delete(state.players, player_id)}
+    %{
+      state
+      | players: Map.delete(state.players, player_id),
+        player_order: List.delete(state.player_order, player_id)
+    }
     |> tap(&broadcast_state/1)
   end
 
@@ -239,13 +329,34 @@ defmodule Cah.CahServer do
 
   defp public_state(state) do
     players =
-      Enum.map(state.players, fn {id, player} ->
-        %{id: id, name: player.name, connected: player.connected}
+      Enum.map(state.player_order, fn id ->
+        player = state.players[id]
+
+        %{
+          id: id,
+          name: player.name,
+          connected: player.connected,
+          submitted: Map.has_key?(state.submissions, id)
+        }
       end)
 
     lobby_phase = state.phase
     black_card = state.black_card
     czar = state.czar
-    %{players: players, phase: lobby_phase, black_card: black_card, czar: czar}
+
+    submissions =
+      if state.phase in [:judging, :reveal] do
+        Enum.map(state.reveal_order, &state.submissions[&1])
+      else
+        []
+      end
+
+    %{
+      players: players,
+      phase: lobby_phase,
+      black_card: black_card,
+      czar: czar,
+      submissions: submissions
+    }
   end
 end

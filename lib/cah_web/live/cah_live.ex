@@ -26,6 +26,15 @@ defmodule CahWeb.CahLive do
         </form>
       <% end %>
 
+      <%= if @player_id == @czar and @phase == :judging do %>
+        submitted cards
+        <div :for={{cards, index} <- Enum.with_index(@submissions)}>
+          <button phx-click="pick_cards" phx-value-index={index}>
+            <span :for={card <- cards}>{Cah.Cards.text(card)}</span>
+          </button>
+        </div>
+      <% end %>
+
       <%= if @phase == :submitting do %>
         <span>playing</span>
         <div>
@@ -125,12 +134,31 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
+  def handle_event("pick_cards", %{"index" => index}, socket) do
+    CahServer.pick_cards(socket.assigns.player_id, index)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(
         {:game_state,
-         %{:players => players, :phase => phase, :black_card => black_card, :czar => czar}},
+         %{
+           :players => players,
+           :phase => phase,
+           :black_card => black_card,
+           :czar => czar,
+           :submissions => submissions
+         }},
         socket
       ) do
-    {:noreply, assign(socket, players: players, phase: phase, black_card: black_card, czar: czar)}
+    {:noreply,
+     assign(socket,
+       players: players,
+       phase: phase,
+       black_card: black_card,
+       czar: czar,
+       submissions: submissions
+     )}
   end
 
   @impl true
