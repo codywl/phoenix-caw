@@ -1,6 +1,7 @@
 defmodule Cah.Cards do
+  @path Application.app_dir(:cah, "priv/cards.txt")
   [white_cards, black_cards] =
-    File.read!("priv/cards.txt")
+    File.read!(@path)
     |> String.split(~r/^-+$/m, parts: 2)
     |> Enum.map(fn section ->
       section
@@ -33,7 +34,8 @@ defmodule Cah.Cards do
   end
 
   def black_spaces(card) do
-    card |> text |> String.count("_")
+    blanks = Regex.scan(~r/_+/, text(card)) |> length()
+    max(blanks, 1)
   end
 
   def white_ids do

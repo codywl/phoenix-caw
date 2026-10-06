@@ -28,6 +28,10 @@ defmodule Cah.CahServer do
     GenServer.call(__MODULE__, {:start_game, player})
   end
 
+  def reset_game(player_id) do
+    GenServer.call(__MODULE__, {:reset_game, player_id})
+  end
+
   def submit(player_id, cards) do
     GenServer.call(__MODULE__, {:submit, player_id, cards})
   end
@@ -131,6 +135,40 @@ defmodule Cah.CahServer do
 
       true ->
         {:reply, {:error, :not_host}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:reset_game, player_id}, _, state) do
+    is_host = state.host == player_id
+
+    if is_host do
+      players =
+        Map.new(state.players, fn {id, player} ->
+          {id, %{player | score: 0, hand: []}}
+        end)
+
+      state = %{
+        state
+        | submissions: %{},
+          players: players,
+          discard: [],
+          reveal_order: [],
+          czar: nil,
+          black_card: nil,
+          black_deck: Cah.Cards.deal_black(),
+          white_deck: Cah.Cards.deal_white(),
+          phase: :lobby
+      }
+
+      Enum.each(state.players, fn {id, _player} ->
+        send_hand(state, id)
+      end)
+
+      broadcast_state(state)
+      {:reply, :ok, state}
+    else
+      {:reply, {:error, :not_host}, state}
     end
   end
 
@@ -344,6 +382,7 @@ defmodule Cah.CahServer do
     lobby_phase = state.phase
     black_card = state.black_card
     czar = state.czar
+    target_score = state.target_score
 
     submissions =
       if state.phase in [:judging, :reveal] do
@@ -357,7 +396,8 @@ defmodule Cah.CahServer do
       phase: lobby_phase,
       black_card: black_card,
       czar: czar,
-      submissions: submissions
+      submissions: submissions,
+      target_score: target_score
     }
   end
 end
