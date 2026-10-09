@@ -56,7 +56,8 @@ defmodule Cah.CahServer do
        czar: nil,
        reveal_order: [],
        player_order: [],
-       target_score: 5
+       target_score: 5,
+       grace_timers: %{}
      }}
   end
 
@@ -281,12 +282,34 @@ defmodule Cah.CahServer do
 
     state =
       case state.players[player_id] do
-        %{pid: ^pid} -> put_in(state, [:players, player_id, :connected], false)
-        _ -> state
+        %{pid: ^pid} ->
+          timer = Process.send_after(self(), {:grace_expired, player_id}, 30_000)
+          grace_timers = Map.put(state.grace_timers, player_id, timer)
+          %{state | grace_timers: grace_timers}
+
+        _ ->
+          state
       end
 
-    broadcast_state(state)
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:grace_expired, player_id}, state) do
+    case Map.pop(state.grace_timers, player_id) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {_ref, timers} ->
+        state = %{state | grace_timers: timers}
+
+        state = put_in(state, [:players, player_id, :connected], false)
+
+        state = maybe_progress(state)
+
+        broadcast_state(state)
+        {:noreply, state}
+    end
   end
 
   @impl true
@@ -336,6 +359,16 @@ defmodule Cah.CahServer do
   defp attach(state, player_id, pid) do
     players =
       Map.update!(state.players, player_id, fn player -> %{player | pid: pid, connected: true} end)
+
+    state =
+      case Map.pop(state.grace_timers, player_id) do
+        {nil, _} ->
+          state
+
+        {timer, timers} ->
+          Process.cancel_timer(timer)
+          %{state | grace_timers: timers}
+      end
 
     host = state.host || player_id
     role = if host == player_id, do: :host, else: :player
