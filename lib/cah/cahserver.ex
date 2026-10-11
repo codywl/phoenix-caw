@@ -36,6 +36,10 @@ defmodule Cah.CahServer do
     GenServer.call(__MODULE__, {:submit, player_id, cards})
   end
 
+  def discard(player_id, cards) do
+    GenServer.call(__MODULE__, {:discard, player_id, cards})
+  end
+
   def pick_cards(player_id, index) do
     GenServer.call(__MODULE__, {:pick_cards, player_id, index})
   end
@@ -52,6 +56,7 @@ defmodule Cah.CahServer do
        black_deck: Cah.Cards.deal_black(),
        black_card: nil,
        discard: [],
+       discarding: %{},
        submissions: %{},
        czar: nil,
        reveal_order: [],
@@ -84,6 +89,9 @@ defmodule Cah.CahServer do
       Map.has_key?(state.submissions, player_id) ->
         {:reply, {:error, :already_submitted}, state}
 
+      Map.has_key?(state.discarding, player_id) ->
+        {:reply, {:error, :already_discarded}, state}
+
       true ->
         remaining_cards = player.hand -- cards
 
@@ -95,6 +103,59 @@ defmodule Cah.CahServer do
         submissions = Map.put_new(state.submissions, player_id, cards)
 
         state = %{state | players: players, submissions: submissions}
+        state = maybe_progress(state)
+
+        broadcast_state(state)
+        send_hand(state, player_id)
+        {:reply, :ok, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:discard, player_id, cards}, _, state) do
+    player = Map.get(state.players, player_id)
+
+    cond do
+      player == nil ->
+        {:reply, {:error, :no_player}, state}
+
+      state.phase != :submitting ->
+        {:reply, {:error, :wrong_phase}, state}
+
+      length(Enum.uniq(cards)) != length(cards) ->
+        {:reply, {:error, :duplicate_whites}, state}
+
+      not Enum.all?(cards, &(&1 in player.hand)) ->
+        {:reply, {:error, :not_in_hand}, state}
+
+      cards == [] ->
+        {:reply, {:error, :no_cards}, state}
+
+      length(cards) > length(player.hand) ->
+        {:reply, {:error, :too_many_discards}, state}
+
+      Map.has_key?(state.submissions, player_id) ->
+        {:reply, {:error, :already_submitted}, state}
+
+      Map.has_key?(state.discarding, player_id) ->
+        {:reply, {:error, :already_discarded}, state}
+
+      true ->
+        remaining_cards = player.hand -- cards
+
+        discarding = Map.put_new(state.discarding, player_id, cards)
+
+        players =
+          Map.update!(state.players, player_id, fn player ->
+            %{player | hand: remaining_cards, score: max(player.score - 1, 0)}
+          end)
+
+        state = %{
+          state
+          | discarding: discarding,
+            players: players
+        }
+
         state = maybe_progress(state)
 
         broadcast_state(state)
@@ -144,29 +205,7 @@ defmodule Cah.CahServer do
     is_host = state.host == player_id
 
     if is_host do
-      players =
-        Map.new(state.players, fn {id, player} ->
-          {id, %{player | score: 0, hand: []}}
-        end)
-
-      state = %{
-        state
-        | submissions: %{},
-          players: players,
-          discard: [],
-          reveal_order: [],
-          czar: nil,
-          black_card: nil,
-          black_deck: Cah.Cards.deal_black(),
-          white_deck: Cah.Cards.deal_white(),
-          phase: :lobby
-      }
-
-      Enum.each(state.players, fn {id, _player} ->
-        send_hand(state, id)
-      end)
-
-      broadcast_state(state)
+      state = do_reset(state)
       {:reply, :ok, state}
     else
       {:reply, {:error, :not_host}, state}
@@ -245,34 +284,56 @@ defmodule Cah.CahServer do
   end
 
   defp next_round(state) do
-    state =
-      if state.black_deck == [] do
-        %{state | black_deck: Cah.Cards.deal_black()}
-      else
+    if Enum.count(state.players, fn {_id, player} -> player.connected end) > 2 do
+      state =
+        if state.black_deck == [] do
+          %{state | black_deck: Cah.Cards.deal_black()}
+        else
+          state
+        end
+
+      [black_card | rest] = state.black_deck
+      black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
+
+      state =
+        Enum.reduce(Map.keys(state.players), state, fn id, state ->
+          player = Map.get(state.players, id)
+          draw(state, id, 10 - length(player.hand))
+        end)
+
+      new_czar = find_czar(state)
+
+      discard = state.discard ++ (state.discarding |> Map.values() |> List.flatten())
+
+      %{
         state
-      end
+        | submissions: %{},
+          reveal_order: [],
+          czar: new_czar,
+          black_card: black_card,
+          black_deck: rest,
+          phase: :submitting,
+          discarding: %{},
+          discard: discard
+      }
+    else
+      PubSub.broadcast(:cah_pubsub, @topic, {:notice, :not_enough_players_left})
+      do_reset(state)
+    end
+  end
 
-    [black_card | rest] = state.black_deck
-    black_card = %{id: black_card, picks: Cah.Cards.black_spaces(black_card)}
+  defp first_connected(state) do
+    Enum.find(state.player_order, &state.players[&1].connected)
+  end
 
-    state =
-      Enum.reduce(Map.keys(state.players), state, fn id, state ->
-        player = Map.get(state.players, id)
-        draw(state, id, 10 - length(player.hand))
-      end)
+  defp find_czar(state) do
+    order = state.player_order
 
-    current_czar = Enum.find_index(state.player_order, &(&1 == state.czar))
-    new_czar = Enum.at(state.player_order, rem(current_czar + 1, length(state.player_order)))
+    i = Enum.find_index(order, &(&1 == state.czar)) || -1
+    {before, after_czar} = Enum.split(order, i + 1)
 
-    %{
-      state
-      | submissions: %{},
-        reveal_order: [],
-        czar: new_czar,
-        black_card: black_card,
-        black_deck: rest,
-        phase: :submitting
-    }
+    (after_czar ++ before)
+    |> Enum.find(&state.players[&1].connected)
   end
 
   @impl true
@@ -303,12 +364,29 @@ defmodule Cah.CahServer do
       {_ref, timers} ->
         state = %{state | grace_timers: timers}
 
-        state = put_in(state, [:players, player_id, :connected], false)
+        if Map.has_key?(state.players, player_id) do
+          state = put_in(state, [:players, player_id, :connected], false)
 
-        state = maybe_progress(state)
+          state =
+            if player_id == state.czar do
+              if state.phase in [:submitting, :judging] do
+                PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
+                broadcast_state(state)
+                next_round(state)
+              else
+                state
+              end
+            else
+              maybe_progress(state)
+            end
 
-        broadcast_state(state)
-        {:noreply, state}
+          state = ensure_is_host(state)
+
+          broadcast_state(state)
+          {:noreply, state}
+        else
+          {:noreply, state}
+        end
     end
   end
 
@@ -319,12 +397,20 @@ defmodule Cah.CahServer do
 
   defp maybe_progress(state) do
     expected_size = Enum.count(state.players, fn {id, p} -> p.connected and id != state.czar end)
+    submissions_num = map_size(state.submissions)
+    discarding_num = map_size(state.discarding)
 
-    if expected_size == map_size(state.submissions) do
-      reveal_order = state.submissions |> Map.keys() |> Enum.shuffle()
-      %{state | phase: :judging, reveal_order: reveal_order}
-    else
-      state
+    cond do
+      expected_size == submissions_num + discarding_num ->
+        if submissions_num >= 2 do
+          reveal_order = state.submissions |> Map.keys() |> Enum.shuffle()
+          %{state | phase: :judging, reveal_order: reveal_order}
+        else
+          next_round(state)
+        end
+
+      true ->
+        state
     end
   end
 
@@ -357,9 +443,6 @@ defmodule Cah.CahServer do
 
   # Common logic for :join, :reconnect signals
   defp attach(state, player_id, pid) do
-    players =
-      Map.update!(state.players, player_id, fn player -> %{player | pid: pid, connected: true} end)
-
     state =
       case Map.pop(state.grace_timers, player_id) do
         {nil, _} ->
@@ -369,6 +452,9 @@ defmodule Cah.CahServer do
           Process.cancel_timer(timer)
           %{state | grace_timers: timers}
       end
+
+    players =
+      Map.update!(state.players, player_id, fn player -> %{player | pid: pid, connected: true} end)
 
     host = state.host || player_id
     role = if host == player_id, do: :host, else: :player
@@ -398,6 +484,50 @@ defmodule Cah.CahServer do
     )
   end
 
+  defp ensure_is_host(state) do
+    case state.players[state.host] do
+      %{connected: true} -> state
+      _ -> %{state | host: first_connected(state)}
+    end
+  end
+
+  defp do_reset(state) do
+    connected_players = Enum.filter(state.player_order, &state.players[&1].connected)
+    players = Map.take(state.players, connected_players)
+
+    players =
+      Map.new(players, fn {id, player} ->
+        {id, %{player | score: 0, hand: []}}
+      end)
+
+    Enum.each(state.grace_timers, fn {_id, timer} -> Process.cancel_timer(timer) end)
+
+    state = %{
+      state
+      | submissions: %{},
+        players: players,
+        player_order: connected_players,
+        grace_timers: %{},
+        discard: [],
+        discarding: %{},
+        reveal_order: [],
+        czar: nil,
+        black_card: nil,
+        black_deck: Cah.Cards.deal_black(),
+        white_deck: Cah.Cards.deal_white(),
+        phase: :lobby
+    }
+
+    state = ensure_is_host(state)
+
+    Enum.each(state.players, fn {id, _player} ->
+      send_hand(state, id)
+    end)
+
+    broadcast_state(state)
+    state
+  end
+
   defp public_state(state) do
     players =
       Enum.map(state.player_order, fn id ->
@@ -408,7 +538,8 @@ defmodule Cah.CahServer do
           name: player.name,
           connected: player.connected,
           submitted: Map.has_key?(state.submissions, id),
-          score: player.score
+          score: player.score,
+          discarded: Map.has_key?(state.discarding, id)
         }
       end)
 

@@ -1,4 +1,5 @@
 defmodule Cah.Cards do
+  @external_resource "priv/cards.txt"
   @path Application.app_dir(:cah, "priv/cards.txt")
   [white_cards, black_cards] =
     File.read!(@path)
@@ -22,6 +23,10 @@ defmodule Cah.Cards do
   end
 
   def id({:white, i}) do
+    i
+  end
+
+  def id({:black, i}) do
     i
   end
 

@@ -4,9 +4,6 @@ defmodule CahWeb.CahLive do
   alias Cah.CahServer
 
   @topic "cah:game"
-  # tracking score
-  # deciding win score
-  # passing control to players
   @impl true
   def render(assigns) do
     ~H"""
@@ -17,7 +14,9 @@ defmodule CahWeb.CahLive do
         <h2>Players</h2>
         <div class="divider"></div>
         <li :for={player <- @players}>
-          Score: {player.score} | {player.name}
+          <div :if={not player.connected} class="status status-error animate-ping" />
+          <div :if={player.connected} class="status status-info" />
+          Score: {player.score} | {player.name} {if not player.connected, do: "(disconnected)"}
         </li>
       </ul>
       <%= if @phase != :ended do %>
@@ -46,12 +45,14 @@ defmodule CahWeb.CahLive do
         <% end %>
 
         <%= if @phase == :submitting and @role != nil do %>
+          <% me = get_self(assigns) %>
           <div>
             <h1 class="text-2xl my-4">
               {Cah.Cards.text(@black_card.id)}
             </h1>
           </div>
-          <%= if @player_id != @czar and not get_self(assigns).submitted do %>
+
+          <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
             <ul class="flex gap-2 flex-wrap w-screen">
               <li
                 :for={card <- @hand}
@@ -75,7 +76,16 @@ defmodule CahWeb.CahLive do
                 <div />
               </li>
             </ul>
-            <button class="btn my-4" phx-click="submit_cards">Submit Cards</button>
+            <button
+              :if={length(@selected) == @black_card.picks}
+              class="btn my-4"
+              phx-click="submit_cards"
+            >
+              Submit Selected
+            </button>
+            <div class="tooltip" data-tip="Subtracts one point (unless at zero)">
+              <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
+            </div>
           <% else %>
             <%= if @player_id == @czar do %>
               Waiting for cards..
@@ -92,7 +102,7 @@ defmodule CahWeb.CahLive do
           </li>
         </ul>
         <%= if @role == :host do %>
-        <button phx-click="reset">Reset Game</button>
+          <button phx-click="reset">Reset Game</button>
         <% end %>
       <% end %>
     </div>
@@ -171,7 +181,8 @@ defmodule CahWeb.CahLive do
             card in socket.assigns.selected ->
               List.delete(socket.assigns.selected, card)
 
-            length(socket.assigns.selected) < socket.assigns.black_card.picks ->
+            # now we need to allow more cards than the black card picks for discarding purposes
+            length(socket.assigns.selected) < 10 ->
               socket.assigns.selected ++ [card]
 
             true ->
@@ -197,6 +208,17 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
+  def handle_event("discard_cards", _params, socket) do
+    case CahServer.discard(socket.assigns.player_id, socket.assigns.selected) do
+      :ok ->
+        {:noreply, assign(socket, selected: [])}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, message_for(reason))}
+    end
+  end
+
+  @impl true
   def handle_event("pick_cards", %{"index" => index}, socket) do
     case Integer.parse(index) do
       {int, _} ->
@@ -211,6 +233,11 @@ defmodule CahWeb.CahLive do
       :error ->
         {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_info({:notice, reason}, socket) do
+    {:noreply, put_flash(socket, :info, message_for(reason))}
   end
 
   @impl true
@@ -281,7 +308,22 @@ defmodule CahWeb.CahLive do
         "Cards were submitted that aren't in the player hand."
 
       :already_submitted ->
-        "Player already submitted."
+        "Already submitted."
+
+      :already_discarded ->
+        "Already discarded."
+
+      :too_many_discards ->
+        "There are too many discards."
+
+      :no_cards ->
+        "No cards found."
+
+      :czar_dropped ->
+        "The Card Czar player dropped; moving on to next round."
+
+      :not_enough_players_left ->
+        "There are no longer enough players to play the game. Resetting."
 
       _ ->
         "Something went wrong."
