@@ -75,7 +75,7 @@ defmodule Cah.Cards do
   def parse_id(_), do: {:error, :unknown_card_prefix}
 
   def deal_white do
-    blanks = Enum.map(0..9999, &{:blank, &1})
+    blanks = Enum.map(0..200, &{:blank, &1})
     (white_ids() ++ blanks) |> Enum.shuffle()
   end
 

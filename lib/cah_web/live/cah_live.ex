@@ -7,118 +7,143 @@ defmodule CahWeb.CahLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
     <Layouts.flash_group flash={@flash} />
-    <div class="main-content max-w-96 p-4">
-      <ul class="">
-        <h2>Players</h2>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <div class="flex h-screen">
+      <aside class="inset-shadow w-64 shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
+        <h2 class="text-lg font-bold mb-2">Players</h2>
         <div class="divider"></div>
-        <li :for={player <- @players}>
-          <div :if={not player.connected} class="status status-error animate-ping" />
-          <div :if={player.connected} class="status status-info" />
-          Score: {player.score} | {player.name} {if not player.connected, do: "(disconnected)"}
-        </li>
-      </ul>
-      <%= if @phase != :ended do %>
-        <%= if @czar != nil do %>
-          {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
-        <% end %>
-        <%= if @role == nil do %>
-          <form phx-submit="join">
-            <input type="text" class="input" name="player_name" placeholder="Player name" />
-          </form>
-        <% end %>
-
-        <%= if @role == :host and @phase == :lobby do %>
-          <form phx-submit="start">
-            <.button>Start Game</.button>
-          </form>
-        <% end %>
-
-        <%= if @phase == :judging do %>
-          submitted cards
-          <div :for={{cards, index} <- Enum.with_index(@submissions)}>
-            <button phx-click={@player_id == @czar && "pick_cards"} phx-value-index={index}>
-              <span :for={card <- cards}>{Cah.Cards.text(card)}</span>
-            </button>
-          </div>
-        <% end %>
-
-        <%= if @phase == :submitting and @role != nil do %>
-          <% me = get_self(assigns) %>
-          <div>
-            <h1 class="text-2xl my-4">
-              {Cah.Cards.text(@black_card.id)}
-            </h1>
-          </div>
-
-          <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
-            <ul class="flex gap-2 flex-wrap w-screen">
-              <li
-                :for={card <- @hand}
-                class={["cah-card hover-3d", card in @selected && "selected"]}
-              >
-                <div
-                  phx-click="select_card"
-                  phx-value-card={Cah.Cards.id(card)}
-                  class={[
-                    "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
-                    (card in @selected && "bg-blue-400") || "bg-white"
-                  ]}
-                >
-                  <%= case card do %>
-                    <% {:blank, n} -> %>
-                      <input
-                        placeholder="Your text here.."
-                        phx-keyup="blank_change"
-                        class="validator z-100 rounded p-2"
-                        phx-value-n={n}
-                        phx-debounce="300"
-                        value={Map.get(@blank_texts, n, "")}
-                      />
-                    <% _ -> %>
-                      {Cah.Cards.text(card)}
-                  <% end %>
-                </div>
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-              </li>
-            </ul>
-            <button
-              :if={length(@selected) == @black_card.picks}
-              class="btn my-4"
-              phx-click="submit_cards"
-            >
-              Submit Selected
-            </button>
-            <div class="tooltip" data-tip="Subtracts one point (unless at zero)">
-              <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
-            </div>
-          <% else %>
-            <%= if @player_id == @czar do %>
-              Waiting for cards..
-            <% else %>
-              Waiting for other players..
-            <% end %>
-          <% end %>
-        <% end %>
-      <% else %>
-        The game is over. The winner is {Enum.max_by(@players, & &1.score).name}.
-        <ul>
-          <li :for={player <- Enum.sort_by(@players, & &1.score, :desc)}>
-            <span>{player.name} scored {player.score} points.</span>
+        <ul class="space-y-2">
+          <li :for={player <- @players} class="flex items-center gap-2">
+            <div :if={not player.connected} class="status status-error animate-ping" />
+            <div :if={player.connected} class="status status-info" />
+            <span class="truncate">
+              {player.name}
+              <span class="text-sm opacity-60">({player.score})</span>
+              {if not player.connected, do: " (disconnected)"}
+            </span>
           </li>
         </ul>
-        <%= if @role == :host do %>
-          <button phx-click="reset">Reset Game</button>
+      </aside>
+      <main class="flex-1 overflow-y-auto p-6">
+        <%= if @phase != :ended do %>
+          <%= if @czar != nil do %>
+            {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
+          <% end %>
+          <%= if @role == nil do %>
+            <form phx-submit="join">
+              <input type="text" class="input" name="player_name" placeholder="Player name" />
+            </form>
+          <% end %>
+
+          <%= if @role == :host and @phase == :lobby do %>
+            <form phx-submit="start">
+              <.button>Start Game</.button>
+            </form>
+          <% end %>
+
+          <%= if @phase == :judging do %>
+            <div class="bg-black h-46 w-72 my-4 rounded">
+              <h1 class="text-2xl text-white p-2">
+                {Cah.Cards.text(@black_card.id)}
+              </h1>
+            </div>
+            <div :for={{cards, index} <- Enum.with_index(@submissions)} class="">
+              <button
+                class="flex"
+                phx-click={@player_id == @czar && "pick_cards"}
+                phx-value-index={index}
+              >
+                <span
+                  :for={card <- cards}
+                  class="rounded block bg-white w-46 h-72 p-2 my-2 mr-2 text-black"
+                >
+                  {Cah.Cards.text(card)}
+                </span>
+              </button>
+              <div class="divider" />
+            </div>
+          <% end %>
+
+          <%= if @phase == :submitting and @role != nil do %>
+            <% me = get_self(assigns) %>
+            <div class="bg-black h-46 w-72 my-4">
+              <h1 class="text-2xl text-white p-2 rounded-sm">
+                {Cah.Cards.text(@black_card.id)}
+              </h1>
+            </div>
+
+            <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
+              <ul class="flex gap-4 flex-wrap">
+                <li
+                  :for={card <- @hand}
+                  class={["cah-card hover-3d", card in @selected && "selected"]}
+                >
+                  <div class={[
+                    "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
+                    (card in @selected && "bg-orange-400") || "bg-white"
+                  ]}>
+                    <%= case card do %>
+                      <% {:blank, n} -> %>
+                        <input
+                          placeholder="Your text here.."
+                          phx-keyup="blank_change"
+                          class="validator z-100 rounded p-2"
+                          phx-value-n={n}
+                          phx-debounce="300"
+                          value={Map.get(@blank_texts, n, "")}
+                        />
+                      <% _ -> %>
+                        {Cah.Cards.text(card)}
+                    <% end %>
+                    <div
+                      phx-click="select_card"
+                      phx-value-card={Cah.Cards.id(card)}
+                      class="select-none cursor-pointer flex justify-center items-center w-8 h-8 border-2 border-black rounded absolute right-2 bottom-2"
+                    >
+                      {(card in @selected && "x") || ""}
+                    </div>
+                  </div>
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                </li>
+              </ul>
+              <button
+                :if={length(@selected) == @black_card.picks}
+                class="btn my-4"
+                phx-click="submit_cards"
+              >
+                Submit Selected
+              </button>
+              <div class="tooltip" data-tip="Subtracts one point (unless at zero)">
+                <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
+              </div>
+            <% else %>
+              <%= if @player_id == @czar do %>
+                Waiting for cards..
+              <% else %>
+                Waiting for other players..
+              <% end %>
+            <% end %>
+          <% end %>
+        <% else %>
+          The game is over. The winner is {Enum.max_by(@players, & &1.score).name}.
+          <ul>
+            <li :for={player <- Enum.sort_by(@players, & &1.score, :desc)}>
+              <span>{player.name} scored {player.score} points.</span>
+            </li>
+          </ul>
+          <%= if @role == :host do %>
+            <button phx-click="reset">Reset Game</button>
+          <% end %>
         <% end %>
-      <% end %>
+      </main>
     </div>
     """
   end
@@ -243,7 +268,7 @@ defmodule CahWeb.CahLive do
            socket.assigns.selected
          ) do
       :ok ->
-        {:noreply, assign(socket, selected: [])}
+        {:noreply, assign(socket, selected: [], blank_texts: %{})}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, message_for(reason))}
