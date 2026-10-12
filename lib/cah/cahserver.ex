@@ -437,6 +437,7 @@ defmodule Cah.CahServer do
           reveal_order = state.submissions |> Map.keys() |> Enum.shuffle()
           %{state | phase: :judging, reveal_order: reveal_order}
         else
+          PubSub.broadcast(:cah_pubsub, @topic, {:notice, :too_many_players_discarding})
           next_round(state)
         end
 

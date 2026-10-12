@@ -56,20 +56,22 @@ defmodule CahWeb.CahLive do
             <ul class="flex gap-2 flex-wrap w-screen">
               <li
                 :for={card <- @hand}
-                phx-click="select_card"
-                phx-value-card={Cah.Cards.id(card)}
                 class={["cah-card hover-3d", card in @selected && "selected"]}
               >
-                <div class={[
-                  "text-xl h-46 w-72 p-2 rounded-sm text-black",
-                  (card in @selected && "bg-blue-400") || "bg-white"
-                ]}>
+                <div
+                  phx-click="select_card"
+                  phx-value-card={Cah.Cards.id(card)}
+                  class={[
+                    "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
+                    (card in @selected && "bg-blue-400") || "bg-white"
+                  ]}
+                >
                   <%= case card do %>
                     <% {:blank, n} -> %>
                       <input
                         placeholder="Your text here.."
                         phx-keyup="blank_change"
-                        class="z-100 rounded p-2"
+                        class="validator z-100 rounded p-2"
                         phx-value-n={n}
                         phx-debounce="300"
                         value={Map.get(@blank_texts, n, "")}
@@ -357,6 +359,9 @@ defmodule CahWeb.CahLive do
 
       :invalid_blank_text ->
         "The blank card text is empty or too long."
+
+      :too_many_players_discarding ->
+        "Too many players discarding - moving on to next round."
 
       _ ->
         "Something went wrong."
