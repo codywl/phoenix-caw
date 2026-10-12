@@ -32,8 +32,8 @@ defmodule Cah.CahServer do
     GenServer.call(__MODULE__, {:reset_game, player_id})
   end
 
-  def submit(player_id, cards) do
-    GenServer.call(__MODULE__, {:submit, player_id, cards})
+  def submit(player_id, cards, blank_texts) do
+    GenServer.call(__MODULE__, {:submit, player_id, cards, blank_texts})
   end
 
   def discard(player_id, cards) do
@@ -67,7 +67,7 @@ defmodule Cah.CahServer do
   end
 
   @impl true
-  def handle_call({:submit, player_id, cards}, _, state) do
+  def handle_call({:submit, player_id, cards, blank_texts}, _, state) do
     player = Map.get(state.players, player_id)
 
     cond do
@@ -92,12 +92,27 @@ defmodule Cah.CahServer do
       Map.has_key?(state.discarding, player_id) ->
         {:reply, {:error, :already_discarded}, state}
 
+      not Enum.all?(cards, fn
+        {:blank, n} -> valid_blank_text?(Map.get(blank_texts, n))
+        _ -> true
+      end) ->
+        {:reply, {:error, :invalid_blank_text}, state}
+
       true ->
         remaining_cards = player.hand -- cards
 
         players =
           Map.update!(state.players, player_id, fn player ->
             %{player | hand: remaining_cards}
+          end)
+
+        cards =
+          Enum.map(cards, fn
+            {:blank, n} ->
+              {:custom, Map.get(blank_texts, n)}
+
+            card ->
+              card
           end)
 
         submissions = Map.put_new(state.submissions, player_id, cards)
@@ -267,7 +282,12 @@ defmodule Cah.CahServer do
             %{player | score: player.score + 1}
           end)
 
-        discard = state.discard ++ (state.submissions |> Map.values() |> List.flatten())
+        discard =
+          state.discard ++
+            (state.submissions
+             |> Map.values()
+             |> List.flatten()
+             |> Enum.reject(&match?({:custom, _}, &1)))
 
         state = %{state | players: players, discard: discard}
 
@@ -281,6 +301,13 @@ defmodule Cah.CahServer do
         broadcast_state(state)
         {:reply, :ok, state}
     end
+  end
+
+  defp valid_blank_text?(nil), do: false
+
+  defp valid_blank_text?(str) do
+    trimmed = String.trim(str)
+    trimmed != "" and String.length(trimmed) <= 120
   end
 
   defp next_round(state) do
@@ -303,7 +330,11 @@ defmodule Cah.CahServer do
 
       new_czar = find_czar(state)
 
-      discard = state.discard ++ (state.discarding |> Map.values() |> List.flatten())
+      discard =
+        state.discard ++
+          (state.discarding
+           |> Map.values()
+           |> List.flatten())
 
       %{
         state

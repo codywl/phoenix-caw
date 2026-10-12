@@ -22,16 +22,61 @@ defmodule Cah.Cards do
     Enum.at(@black_cards, i)
   end
 
+  def text({:blank, _}) do
+    ""
+  end
+
+  def text({:custom, str}) do
+    str
+  end
+
   def id({:white, i}) do
-    i
+    "white:#{i}"
   end
 
   def id({:black, i}) do
-    i
+    "black:#{i}"
   end
 
+  def id({:blank, i}) do
+    "blank:#{i}"
+  end
+
+  def parse_id("white:" <> n) do
+    case Integer.parse(n) do
+      {int, _} ->
+        {:ok, {:white, int}}
+
+      :error ->
+        {:error, :could_not_parse}
+    end
+  end
+
+  def parse_id("blank:" <> n) do
+    case Integer.parse(n) do
+      {int, _} ->
+        {:ok, {:blank, int}}
+
+      :error ->
+        {:error, :could_not_parse}
+    end
+  end
+
+  def parse_id("black:" <> n) do
+    case Integer.parse(n) do
+      {int, _} ->
+        {:ok, {:black, int}}
+
+      :error ->
+        {:error, :could_not_parse}
+    end
+  end
+
+  def parse_id(_), do: {:error, :unknown_card_prefix}
+
   def deal_white do
-    white_ids() |> Enum.shuffle()
+    blanks = Enum.map(0..9999, &{:blank, &1})
+    (white_ids() ++ blanks) |> Enum.shuffle()
   end
 
   def deal_black do

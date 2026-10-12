@@ -64,7 +64,19 @@ defmodule CahWeb.CahLive do
                   "text-xl h-46 w-72 p-2 rounded-sm text-black",
                   (card in @selected && "bg-blue-400") || "bg-white"
                 ]}>
-                  {Cah.Cards.text(card)}
+                  <%= case card do %>
+                    <% {:blank, n} -> %>
+                      <input
+                        placeholder="Your text here.."
+                        phx-keyup="blank_change"
+                        class="z-100 rounded p-2"
+                        phx-value-n={n}
+                        phx-debounce="300"
+                        value={Map.get(@blank_texts, n, "")}
+                      />
+                    <% _ -> %>
+                      {Cah.Cards.text(card)}
+                  <% end %>
                 </div>
                 <div />
                 <div />
@@ -144,7 +156,8 @@ defmodule CahWeb.CahLive do
        czar: czar,
        selected: [],
        submissions: submissions,
-       target_score: target_score
+       target_score: target_score,
+       blank_texts: %{}
      )}
   end
 
@@ -171,11 +184,21 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
-  def handle_event("select_card", %{"card" => card_id}, socket) do
-    case Integer.parse(card_id) do
+  def handle_event("blank_change", %{"n" => n, "value" => text}, socket) do
+    case Integer.parse(n) do
       {int, _} ->
-        card = {:white, int}
+        blank_texts = Map.put(socket.assigns.blank_texts, int, text)
+        {:noreply, assign(socket, blank_texts: blank_texts)}
 
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("select_card", %{"card" => card_id}, socket) do
+    case Cah.Cards.parse_id(card_id) do
+      {:ok, card} ->
         selected =
           cond do
             card in socket.assigns.selected ->
@@ -191,16 +214,20 @@ defmodule CahWeb.CahLive do
 
         {:noreply, assign(socket, selected: selected)}
 
-      :error ->
+      {:error, _reason} ->
         {:noreply, socket}
     end
   end
 
   @impl true
   def handle_event("submit_cards", _params, socket) do
-    case CahServer.submit(socket.assigns.player_id, socket.assigns.selected) do
+    case CahServer.submit(
+           socket.assigns.player_id,
+           socket.assigns.selected,
+           socket.assigns.blank_texts
+         ) do
       :ok ->
-        {:noreply, assign(socket, selected: [])}
+        {:noreply, assign(socket, selected: [], blank_texts: %{})}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, message_for(reason))}
@@ -209,7 +236,10 @@ defmodule CahWeb.CahLive do
 
   @impl true
   def handle_event("discard_cards", _params, socket) do
-    case CahServer.discard(socket.assigns.player_id, socket.assigns.selected) do
+    case CahServer.discard(
+           socket.assigns.player_id,
+           socket.assigns.selected
+         ) do
       :ok ->
         {:noreply, assign(socket, selected: [])}
 
@@ -324,6 +354,9 @@ defmodule CahWeb.CahLive do
 
       :not_enough_players_left ->
         "There are no longer enough players to play the game. Resetting."
+
+      :invalid_blank_text ->
+        "The blank card text is empty or too long."
 
       _ ->
         "Something went wrong."
