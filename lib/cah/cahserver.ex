@@ -13,7 +13,7 @@ defmodule Cah.CahServer do
   end
 
   def leave(player_id) do
-    GenServer.cast(__MODULE__, {:leave, player_id})
+    GenServer.call(__MODULE__, {:leave, player_id})
   end
 
   def game_state do
@@ -304,6 +304,18 @@ defmodule Cah.CahServer do
     end
   end
 
+  @impl true
+  def handle_call({:leave, player_id}, _, state) do
+    cond do
+      not Map.has_key?(state.players, player_id) ->
+        {:reply, {:error, :cannot_remove_not_existing}, state}
+
+      true ->
+        remove_player(state, player_id)
+        {:reply, :ok, state}
+    end
+  end
+
   defp valid_blank_text?(nil), do: false
 
   defp valid_blank_text?(str) do
@@ -445,11 +457,6 @@ defmodule Cah.CahServer do
           {:noreply, state}
         end
     end
-  end
-
-  @impl true
-  def handle_cast({:leave, player_id}, state) do
-    {:noreply, remove_player(state, player_id)}
   end
 
   defp maybe_progress(state) do

@@ -9,8 +9,8 @@ defmodule CahWeb.CahLive do
     ~H"""
     <Layouts.flash_group flash={@flash} />
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <div class="flex h-screen">
-      <aside class="inset-shadow w-64 shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
+    <div class="flex flex-col md:flex-row h-screen">
+      <aside class="inset-shadow md:w-64 h-auto md:h-full shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
 
         <div class="divider"></div>
@@ -43,6 +43,20 @@ defmodule CahWeb.CahLive do
             </div>
           <% end %>
 
+          <%= if @role == :host and @phase == :lobby do %>
+            <div class="w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700">
+              <h1 class="text-xl py-4">You're the host.</h1>
+              <div class="divider" />
+              <span class="mb-2 text-sm">Controls</span>
+              <form phx-submit="start">
+                <.button>Start Game</.button>
+              </form>
+              <form phx-submit="leave">
+                <.button>Leave Game</.button>
+              </form>
+            </div>
+          <% end %>
+
           <%= if @role != nil do %>
             <%= if length(@players) < 3 do %>
               Waiting for more players..
@@ -52,16 +66,6 @@ defmodule CahWeb.CahLive do
               Waiting to start..
             <% end %>
           <% end %>
-
-          <%= if @role == :host and @phase == :lobby do %>
-            <div class="flex flex-col">
-              <h1 class="text-xl py-4">You're the host.</h1>
-              <form phx-submit="start">
-                <.button>Start Game</.button>
-              </form>
-            </div>
-          <% end %>
-
           <%= if @phase == :judging do %>
             <div class="bg-black h-46 w-72 my-4 rounded">
               <h1 class="text-2xl text-white p-2">
@@ -227,6 +231,17 @@ defmodule CahWeb.CahLive do
     case CahServer.start_game(socket.assigns.player_id) do
       :ok -> {:noreply, socket}
       {:error, reason} -> {:noreply, put_flash(socket, :error, message_for(reason))}
+    end
+  end
+
+  @impl true
+  def handle_event("leave", _params, socket) do
+    case CahServer.leave(socket.assigns.player_id) do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        put_flash(socket, :error, message_for(reason))
     end
   end
 
@@ -407,6 +422,9 @@ defmodule CahWeb.CahLive do
 
       :too_many_players_discarding ->
         "Too many players discarding - moving on to next round."
+
+      :cannot_remove_not_existing ->
+        "Could not remove a non-existent player."
 
       _ ->
         "Something went wrong."
