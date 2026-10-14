@@ -12,7 +12,9 @@ defmodule CahWeb.CahLive do
     <div class="flex h-screen">
       <aside class="inset-shadow w-64 shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
+
         <div class="divider"></div>
+
         <ul class="space-y-2">
           <li :for={player <- @players} class="flex items-center gap-2">
             <div :if={not player.connected} class="status status-error animate-ping" />
@@ -23,23 +25,41 @@ defmodule CahWeb.CahLive do
               {if not player.connected, do: " (disconnected)"}
             </span>
           </li>
-        </ul>
-      </aside>
-      <main class="flex-1 overflow-y-auto p-6">
-        <%= if @phase != :ended do %>
           <%= if @czar != nil do %>
             {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
           <% end %>
+        </ul>
+      </aside>
+
+      <main class="flex flex-col justify-center items-center flex-1 overflow-y-auto p-6">
+        <%= if @phase != :ended do %>
           <%= if @role == nil do %>
-            <form phx-submit="join">
-              <input type="text" class="input" name="player_name" placeholder="Player name" />
-            </form>
+            <div class="rounded p-4 border border-slate-700">
+              <h1 class="text-2xl text-bold my-2">Crows Against World</h1>
+              <form class="flex gap-1" phx-submit="join">
+                <input type="text" class="input" name="player_name" placeholder="Player name" />
+                <button class="btn" type="submit">Join</button>
+              </form>
+            </div>
+          <% end %>
+
+          <%= if @role != nil do %>
+            <%= if length(@players) < 3 do %>
+              Waiting for more players..
+            <% end %>
+
+            <%= if length(@players) > 2 and @phase == :lobby do %>
+              Waiting to start..
+            <% end %>
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <form phx-submit="start">
-              <.button>Start Game</.button>
-            </form>
+            <div class="flex flex-col">
+              <h1 class="text-xl py-4">You're the host.</h1>
+              <form phx-submit="start">
+                <.button>Start Game</.button>
+              </form>
+            </div>
           <% end %>
 
           <%= if @phase == :judging do %>
@@ -88,7 +108,7 @@ defmodule CahWeb.CahLive do
                         <input
                           placeholder="Your text here.."
                           phx-keyup="blank_change"
-                          class="validator z-100 rounded p-2"
+                          class="z-100 rounded p-2"
                           phx-value-n={n}
                           phx-debounce="300"
                           value={Map.get(@blank_texts, n, "")}

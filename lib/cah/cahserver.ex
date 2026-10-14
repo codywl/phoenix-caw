@@ -62,7 +62,8 @@ defmodule Cah.CahServer do
        reveal_order: [],
        player_order: [],
        target_score: 5,
-       grace_timers: %{}
+       grace_timers: %{},
+       removal_timers: %{}
      }}
   end
 
@@ -413,6 +414,31 @@ defmodule Cah.CahServer do
 
           state = ensure_is_host(state)
 
+          timer = Process.send_after(self(), {:removal_expired, player_id}, 180_000)
+          removal_timers = Map.put(state.removal_timers, player_id, timer)
+          state = %{state | removal_timers: removal_timers}
+
+          broadcast_state(state)
+          {:noreply, state}
+        else
+          {:noreply, state}
+        end
+    end
+  end
+
+  @impl true
+  def handle_info({:removal_expired, player_id}, state) do
+    case Map.pop(state.removal_timers, player_id) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {_ref, timers} ->
+        state = %{state | removal_timers: timers}
+
+        state = ensure_is_host(state)
+
+        if Map.has_key?(state.players, player_id) do
+          state = remove_player(state, player_id)
           broadcast_state(state)
           {:noreply, state}
         else
@@ -485,6 +511,16 @@ defmodule Cah.CahServer do
           %{state | grace_timers: timers}
       end
 
+    state =
+      case Map.pop(state.removal_timers, player_id) do
+        {nil, _} ->
+          state
+
+        {timer, timers} ->
+          Process.cancel_timer(timer)
+          %{state | removal_timers: timers}
+      end
+
     players =
       Map.update!(state.players, player_id, fn player -> %{player | pid: pid, connected: true} end)
 
@@ -533,6 +569,7 @@ defmodule Cah.CahServer do
       end)
 
     Enum.each(state.grace_timers, fn {_id, timer} -> Process.cancel_timer(timer) end)
+    Enum.each(state.removal_timers, fn {_id, timer} -> Process.cancel_timer(timer) end)
 
     state = %{
       state
@@ -540,6 +577,7 @@ defmodule Cah.CahServer do
         players: players,
         player_order: connected_players,
         grace_timers: %{},
+        removal_timers: %{},
         discard: [],
         discarding: %{},
         reveal_order: [],
