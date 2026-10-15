@@ -311,7 +311,36 @@ defmodule Cah.CahServer do
         {:reply, {:error, :cannot_remove_not_existing}, state}
 
       true ->
-        remove_player(state, player_id)
+        state =
+          state
+          |> remove_player(player_id)
+          |> ensure_is_host()
+
+        is_czar = state.czar == player_id
+
+        state =
+          cond do
+            # we don't have enough people left
+            state.phase in [:submitting, :judging] and
+                Enum.count(state.players, fn {_id, player} -> player.connected end) < 3 ->
+              PubSub.broadcast(:cah_pubsub, @topic, {:notice, :not_enough_players_left})
+              do_reset(state)
+
+            # we do have enough people, but the czar disconnected
+            is_czar and state.phase in [:submitting, :judging] ->
+              PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
+              next_round(state)
+
+            # we have enough people and the czar didn't drop, so see if we go on to the next phase
+            state.phase == :submitting ->
+              maybe_progress(state)
+
+            true ->
+              state
+          end
+
+        broadcast_state(state)
+
         {:reply, :ok, state}
     end
   end
@@ -548,7 +577,6 @@ defmodule Cah.CahServer do
       | players: Map.delete(state.players, player_id),
         player_order: List.delete(state.player_order, player_id)
     }
-    |> tap(&broadcast_state/1)
   end
 
   defp broadcast_state(state) do
@@ -616,7 +644,8 @@ defmodule Cah.CahServer do
           connected: player.connected,
           submitted: Map.has_key?(state.submissions, id),
           score: player.score,
-          discarded: Map.has_key?(state.discarding, id)
+          discarded: Map.has_key?(state.discarding, id),
+          host: state.host
         }
       end)
 
@@ -624,6 +653,7 @@ defmodule Cah.CahServer do
     black_card = state.black_card
     czar = state.czar
     target_score = state.target_score
+    host = state.host
 
     submissions =
       if state.phase in [:judging, :reveal] do
@@ -638,7 +668,8 @@ defmodule Cah.CahServer do
       black_card: black_card,
       czar: czar,
       submissions: submissions,
-      target_score: target_score
+      target_score: target_score,
+      host: host
     }
   end
 end

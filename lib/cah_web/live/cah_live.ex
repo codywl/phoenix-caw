@@ -25,13 +25,15 @@ defmodule CahWeb.CahLive do
               {if not player.connected, do: " (disconnected)"}
             </span>
           </li>
-          <%= if @czar != nil do %>
-            {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
-          <% end %>
+          <span class="block border border-slate-700 rounded my-4 p-2">
+            <%= if @czar != nil do %>
+              {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
+            <% end %>
+          </span>
         </ul>
       </aside>
 
-      <main class="flex flex-col justify-center items-center flex-1 overflow-y-auto p-6">
+      <main class="flex flex-col justify-center items-center md:items-start flex-1 min-w-0 overflow-y-auto p-6">
         <%= if @phase != :ended do %>
           <%= if @role == nil do %>
             <div class="rounded p-4 border border-slate-700">
@@ -48,12 +50,14 @@ defmodule CahWeb.CahLive do
               <h1 class="text-xl py-4">You're the host.</h1>
               <div class="divider" />
               <span class="mb-2 text-sm">Controls</span>
-              <form phx-submit="start">
-                <.button>Start Game</.button>
-              </form>
-              <form phx-submit="leave">
-                <.button>Leave Game</.button>
-              </form>
+              <div class="flex gap-2">
+                <form phx-submit="start">
+                  <.button>Start Game</.button>
+                </form>
+                <form phx-submit="host_leave">
+                  <.button>Leave Game</.button>
+                </form>
+              </div>
             </div>
           <% end %>
 
@@ -98,10 +102,10 @@ defmodule CahWeb.CahLive do
             </div>
 
             <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
-              <ul class="flex gap-4 flex-wrap">
+              <ul class="flex gap-4 overflow-x-auto md:overflow-visible md:flex-wrap max-w-full">
                 <li
                   :for={card <- @hand}
-                  class={["cah-card hover-3d", card in @selected && "selected"]}
+                  class={["cah-card hover-3d shrink-0", card in @selected && "selected"]}
                 >
                   <div class={[
                     "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
@@ -128,15 +132,15 @@ defmodule CahWeb.CahLive do
                       {(card in @selected && "x") || ""}
                     </div>
                   </div>
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
                 </li>
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
               </ul>
               <button
                 :if={length(@selected) == @black_card.picks}
@@ -193,7 +197,8 @@ defmodule CahWeb.CahLive do
       black_card: black_card,
       czar: czar,
       submissions: submissions,
-      target_score: target_score
+      target_score: target_score,
+      host: host
     } = CahServer.game_state()
 
     {:ok,
@@ -203,6 +208,7 @@ defmodule CahWeb.CahLive do
        players: players,
        phase: phase,
        hand: [],
+       host: host,
        black_card: black_card,
        czar: czar,
        selected: [],
@@ -235,13 +241,13 @@ defmodule CahWeb.CahLive do
   end
 
   @impl true
-  def handle_event("leave", _params, socket) do
+  def handle_event("host_leave", _params, socket) do
     case CahServer.leave(socket.assigns.player_id) do
       :ok ->
         {:noreply, socket}
 
       {:error, reason} ->
-        put_flash(socket, :error, message_for(reason))
+        {:noreply, put_flash(socket, :error, message_for(reason))}
     end
   end
 
@@ -341,14 +347,17 @@ defmodule CahWeb.CahLive do
            :black_card => black_card,
            :czar => czar,
            :submissions => submissions,
-           :target_score => target_score
+           :target_score => target_score,
+           :host => host
          }},
         socket
       ) do
     role =
-      if Enum.any?(players, &(&1.id == socket.assigns.player_id)),
-        do: socket.assigns.role,
-        else: nil
+      cond do
+        not Enum.any?(players, &(&1.id == socket.assigns.player_id)) -> nil
+        host == socket.assigns.player_id -> :host
+        true -> :player
+      end
 
     {:noreply,
      assign(socket,
