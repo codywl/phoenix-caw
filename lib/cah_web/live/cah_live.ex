@@ -2,6 +2,7 @@ defmodule CahWeb.CahLive do
   use CahWeb, :live_view
   alias Phoenix.PubSub
   alias Cah.CahServer
+  alias Phoenix.LiveView.JS
 
   @topic "cah:game"
   @impl true
@@ -10,7 +11,7 @@ defmodule CahWeb.CahLive do
     <Layouts.flash_group flash={@flash} />
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
     <div class="flex flex-col md:flex-row h-screen">
-      <aside class="inset-shadow md:w-64 h-auto md:h-full shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
+      <aside class="shadow shadow-4 md:w-64 h-auto md:h-full shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
 
         <div class="divider"></div>
@@ -25,18 +26,18 @@ defmodule CahWeb.CahLive do
               {if not player.connected, do: " (disconnected)"}
             </span>
           </li>
-          <span class="block border border-slate-700 rounded my-4 p-2">
-            <%= if @czar != nil do %>
+          <%= if @czar != nil do %>
+            <span class="block border border-slate-700 rounded my-4 p-2">
               {Enum.find(assigns.players, &(&1.id == @czar)).name} is the Card Czar.
-            <% end %>
-          </span>
+            </span>
+          <% end %>
         </ul>
       </aside>
 
-      <main class="flex flex-col justify-center items-center md:items-start flex-1 min-w-0 overflow-y-auto p-6">
+      <main class="flex flex-col items-center md:items-start flex-1 min-w-0 p-6 overflow-y-auto">
         <%= if @phase != :ended do %>
           <%= if @role == nil do %>
-            <div class="rounded p-4 border border-slate-700">
+            <div class="self-center rounded p-4 border border-slate-700">
               <h1 class="text-2xl text-bold my-2">Crows Against World</h1>
               <form class="flex gap-1" phx-submit="join">
                 <input type="text" class="input" name="player_name" placeholder="Player name" />
@@ -46,7 +47,7 @@ defmodule CahWeb.CahLive do
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <div class="w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700">
+            <div class="self-center w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700">
               <h1 class="text-xl py-4">You're the host.</h1>
               <div class="divider" />
               <span class="mb-2 text-sm">Controls</span>
@@ -63,40 +64,55 @@ defmodule CahWeb.CahLive do
 
           <%= if @role != nil do %>
             <%= if length(@players) < 3 do %>
-              Waiting for more players..
+              <p class="self-center">
+                Waiting for more players..
+              </p>
             <% end %>
 
             <%= if length(@players) > 2 and @phase == :lobby do %>
-              Waiting to start..
+              <p class="self-center">
+                Waiting to start..
+              </p>
             <% end %>
           <% end %>
           <%= if @phase == :judging do %>
-            <div class="bg-black h-46 w-72 my-4 rounded">
+            <div class="bg-black min-h-46 w-72 my-4 rounded">
               <h1 class="text-2xl text-white p-2">
                 {Cah.Cards.text(@black_card.id)}
               </h1>
             </div>
-            <div :for={{cards, index} <- Enum.with_index(@submissions)} class="">
-              <button
-                class="flex"
-                phx-click={@player_id == @czar && "pick_cards"}
-                phx-value-index={index}
-              >
-                <span
-                  :for={card <- cards}
-                  class="rounded block bg-white w-46 h-72 p-2 my-2 mr-2 text-black"
+            <div class="flex flex-col flex-wrap">
+              <div :for={{cards, index} <- Enum.with_index(@submissions)} class="w-72">
+                <div class="divider" />
+                <div
+                  class="stack stack-start w-full"
+                  id={"submission-#{index}"}
+                  phx-hook="CardStack"
                 >
-                  {Cah.Cards.text(card)}
-                </span>
-              </button>
-              <div class="divider" />
+                  <span
+                    :for={card <- cards}
+                    class="stack-card border text-xl border-slate-700 rounded block bg-white w-full h-72 p-2 my-2 mr-2 text-black"
+                  >
+                    {Cah.Cards.text(card)}
+                  </span>
+                </div>
+                <%= if @czar == @player_id do %>
+                  <button
+                    class="btn"
+                    phx-click={@player_id == @czar && "pick_cards"}
+                    phx-value-index={index}
+                  >
+                    Pick Cards
+                  </button>
+                <% end %>
+              </div>
             </div>
           <% end %>
 
           <%= if @phase == :submitting and @role != nil do %>
             <% me = get_self(assigns) %>
-            <div class="bg-black h-46 w-72 my-4">
-              <h1 class="text-2xl text-white p-2 rounded-sm">
+            <div class="bg-black h-46 w-72 my-4 p-2 rounded">
+              <h1 class="text-2xl text-white p-2">
                 {Cah.Cards.text(@black_card.id)}
               </h1>
             </div>

@@ -316,29 +316,6 @@ defmodule Cah.CahServer do
           |> remove_player(player_id)
           |> ensure_is_host()
 
-        is_czar = state.czar == player_id
-
-        state =
-          cond do
-            # we don't have enough people left
-            state.phase in [:submitting, :judging] and
-                Enum.count(state.players, fn {_id, player} -> player.connected end) < 3 ->
-              PubSub.broadcast(:cah_pubsub, @topic, {:notice, :not_enough_players_left})
-              do_reset(state)
-
-            # we do have enough people, but the czar disconnected
-            is_czar and state.phase in [:submitting, :judging] ->
-              PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
-              next_round(state)
-
-            # we have enough people and the czar didn't drop, so see if we go on to the next phase
-            state.phase == :submitting ->
-              maybe_progress(state)
-
-            true ->
-              state
-          end
-
         broadcast_state(state)
 
         {:reply, :ok, state}
@@ -480,6 +457,30 @@ defmodule Cah.CahServer do
 
         if Map.has_key?(state.players, player_id) do
           state = remove_player(state, player_id)
+          is_czar = state.czar == player_id
+
+          state =
+            cond do
+              # we don't have enough people left
+              state.phase in [:submitting, :judging] and
+                  Enum.count(state.players, fn {_id, player} -> player.connected end) < 3 ->
+                PubSub.broadcast(:cah_pubsub, @topic, {:notice, :not_enough_players_left})
+                do_reset(state)
+
+              # we do have enough people, but the czar disconnected
+              is_czar and state.phase in [:submitting, :judging] ->
+                PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
+                next_round(state)
+
+              # we have enough people and the czar didn't drop, so see if we go on to the next phase
+              # (e.g., everyone else submitted)
+              state.phase == :submitting ->
+                maybe_progress(state)
+
+              true ->
+                state
+            end
+
           broadcast_state(state)
           {:noreply, state}
         else

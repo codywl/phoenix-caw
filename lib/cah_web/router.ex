@@ -19,6 +19,7 @@ defmodule CahWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
     live "/cah", CahLive
   end
 
