@@ -18,9 +18,7 @@ defmodule CahWeb.Router do
   scope "/", CahWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
-
-    live "/cah", CahLive
+    live "/", CahLive
   end
 
   # Other scopes may use custom stacks.
