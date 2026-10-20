@@ -2,7 +2,6 @@ defmodule CahWeb.CahLive do
   use CahWeb, :live_view
   alias Phoenix.PubSub
   alias Cah.CahServer
-  alias Phoenix.LiveView.JS
 
   @topic "cah:game"
   @impl true
@@ -10,8 +9,14 @@ defmodule CahWeb.CahLive do
     ~H"""
     <Layouts.flash_group flash={@flash} />
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <div class="flex flex-col md:flex-row h-screen">
-      <aside class="shadow shadow-4 md:w-64 h-auto md:h-full shrink-0 border-r border-base-300 bg-base-200 p-4 overflow-y-auto">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&&display=swap"
+      rel="stylesheet"
+    />
+    <div class="text-white flex flex-col md:flex-row h-screen font-[DM_Sans]">
+      <aside class="shadow shadow-4 md:w-64 h-auto md:h-full shrink-0 bg-slate-900 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
 
         <div class="divider"></div>
@@ -34,23 +39,28 @@ defmodule CahWeb.CahLive do
         </ul>
       </aside>
 
-      <main class="flex flex-col items-center md:items-start flex-1 min-w-0 p-6 overflow-y-auto">
+      <main class="bg-slate-800 flex flex-col items-center md:justify-center md:items-start flex-1 min-w-0 p-6 overflow-y-auto">
         <%= if @phase != :ended do %>
           <%= if @role == nil do %>
-            <div class="self-center rounded p-4 border border-slate-700">
-              <h1 class="text-2xl text-bold my-2">Crows Against World</h1>
+            <div class="self-center rounded p-4 border border-slate-700 bg-slate-900">
+              <h1 class="text-center text-2xl text-bold my-2">Crows Against World</h1>
+              <h1 class="text-center text-[100px]">🐦‍⬛</h1>
               <form class="flex gap-1" phx-submit="join">
-                <input type="text" class="input" name="player_name" placeholder="Player name" />
+                <input
+                  type="text"
+                  class="input text-black bg-white"
+                  name="player_name"
+                  placeholder="Player name"
+                />
                 <button class="btn" type="submit">Join</button>
               </form>
             </div>
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <div class="self-center w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700">
+            <div class="self-center w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700 bg-slate-900">
               <h1 class="text-xl py-4">You're the host.</h1>
               <div class="divider" />
-              <span class="mb-2 text-sm">Controls</span>
               <div class="flex gap-2">
                 <form phx-submit="start">
                   <.button>Start Game</.button>
@@ -165,7 +175,7 @@ defmodule CahWeb.CahLive do
               >
                 Submit Selected
               </button>
-              <div class="tooltip" data-tip="Subtracts one point (unless at zero)">
+              <div class="tooltip tooltip-right" data-tip="Subtracts one point (unless at zero)">
                 <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
               </div>
             <% else %>
