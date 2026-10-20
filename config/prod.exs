@@ -12,6 +12,8 @@ config :cah, CahWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest
 # Note `:force_ssl` is required to be set at compile-time.
 config :cah, CahWeb.Endpoint,
   force_ssl: [rewrite_on: [:x_forwarded_proto]],
+  check_origin: false,
+  url: [host: "//onrender.com"],
   exclude: [
     # paths: ["/health"],
     hosts: ["localhost", "127.0.0.1"]
