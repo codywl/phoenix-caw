@@ -7,10 +7,6 @@
 # General application configuration
 import Config
 
-config :cah,
-  ecto_repos: [Cah.Repo],
-  generators: [timestamp_type: :utc_datetime]
-
 # Configure the endpoint
 config :cah, CahWeb.Endpoint,
   url: [host: "localhost"],

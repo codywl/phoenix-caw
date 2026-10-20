@@ -9,7 +9,6 @@ defmodule Cah.Application do
   def start(_type, _args) do
     children = [
       CahWeb.Telemetry,
-      Cah.Repo,
       {DNSCluster, query: Application.get_env(:cah, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: :cah_pubsub},
       Cah.CahServer,
