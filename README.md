@@ -11,3 +11,15 @@ This is an Elixir/Phoenix implementation of an online Cards Against Humanity gam
 
 ## Running
 Simply run `mix phx.server` if you want the development server to run. (Of course, you will need Elixir/Mix installed.)
+
+## TODO
+### Features
+[ ] Specifying scores before starting the game.
+[ ] Multiple rooms with DynamicSupervisor.
+
+### Styles
+[ ] Better alignment and distribution of elements, generally.
+[ ] "Pick Cards" for Czar spanning full width of cards.
+
+### Bugfixes
+[ ] Grace timer player expirations can trigger the "Not enough players" condition before removal_timer hits.
