@@ -15,7 +15,10 @@ defmodule CahWeb.CahLive do
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&&display=swap"
       rel="stylesheet"
     />
-    <div data-theme="dark" class="text-white flex flex-col md:flex-row h-screen font-[DM_Sans]">
+    <div
+      data-theme="dark"
+      class="text-white flex flex-col md:flex-row min-h-screen md:h-screen font-[DM_Sans]"
+    >
       <aside class="shadow shadow-4 md:w-64 h-auto md:h-full shrink-0 bg-slate-900 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
 
@@ -39,10 +42,10 @@ defmodule CahWeb.CahLive do
         </ul>
       </aside>
 
-      <main class="bg-slate-800 flex flex-col items-center md:items-start flex-1 min-w-0 p-2 md:p-6 overflow-y-auto">
+      <main class="bg-slate-800 grid grid-cols-1 md:grid-cols-3 md:grid-rows-3 gap-2 items-center md:items-start flex-1 min-w-0 min-h-0 p-2 md:p-6 overflow-y-auto overflow-x-hidden">
         <%= if @phase != :ended do %>
           <%= if @role == nil do %>
-            <div class="self-center rounded p-4 border border-slate-700 bg-slate-900 m-auto">
+            <div class="self-center justify-self-center md:col-start-2 md:col-end-2 md:row-start-2 md:row-end-2 rounded p-4 border border-slate-700 bg-slate-900  w-fit">
               <h1 class="text-center text-2xl text-bold my-2">Crows Against World</h1>
               <h1 class="text-center text-[100px]">🐦‍⬛</h1>
               <form class="flex gap-1" phx-submit="join">
@@ -58,7 +61,7 @@ defmodule CahWeb.CahLive do
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <div class="self-center w-full md:w-fit flex flex-col gap-2 rounded p-4 my-2 border border-slate-700 bg-slate-900 m-auto">
+            <div class="self-center justify-self-center md:col-start-2 md:col-end-2 md:row-start-2 md:row-end-2 w-full md:w-fit flex flex-col gap-2 rounded p-4 my-2 border border-slate-700 bg-slate-900 m-auto">
               <h1 class="border border-slate-700 text-xl text-center py-4">You're the host.</h1>
               <div class="justify-between flex gap-2">
                 <form class="w-[50%]" phx-submit="start">
@@ -73,121 +76,125 @@ defmodule CahWeb.CahLive do
 
           <%= if @role != nil do %>
             <%= if length(@players) < 3 and @player_id != @host do %>
-              <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+              <p class="border border-slate-700 bg-slate-900 p-4 self-center col-start-2 col-end-2 row-start-2 row-end-2 justify-self-center">
                 Waiting for more players..
               </p>
             <% end %>
 
             <%= if length(@players) > 2 and @phase == :lobby do %>
-              <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+              <p class="border border-slate-700 bg-slate-900 p-4 self-center col-start-2 col-end-2 row-start-2 row-end-2 justify-self-center">
                 Waiting to start..
               </p>
             <% end %>
           <% end %>
           <%= if @phase == :judging do %>
-            <div class="bg-black min-h-46 w-72 my-4 rounded">
-              <h1 class="text-2xl text-white p-2">
-                {Cah.Cards.text(@black_card.id)}
-              </h1>
-            </div>
-            <div class="flex flex-col flex-wrap">
-              <div :for={{cards, index} <- Enum.with_index(@submissions)} class="w-72">
-                <div class="divider" />
-                <div
-                  class="stack stack-start w-full"
-                  id={"submission-#{index}"}
-                  phx-hook="CardStack"
-                >
-                  <span
-                    :for={card <- cards}
-                    class="stack-card border text-xl border-slate-700 rounded block bg-white w-full h-72 p-2 my-2 mr-2 text-black"
+            <div class="col-span-3 flex flex-col">
+              <div class="bg-black min-h-46 w-72 my-4 rounded">
+                <h1 class="text-2xl text-white p-2">
+                  {Cah.Cards.text(@black_card.id)}
+                </h1>
+              </div>
+              <div class="flex flex-row flex-wrap gap-4">
+                <div :for={{cards, index} <- Enum.with_index(@submissions)} class="w-72">
+                  <div class="divider" />
+                  <div
+                    class="stack stack-start w-full"
+                    id={"submission-#{index}"}
+                    phx-hook="CardStack"
                   >
-                    {Cah.Cards.text(card)}
-                  </span>
+                    <span
+                      :for={card <- cards}
+                      class="stack-card border text-xl border-slate-700 rounded block bg-white w-full h-72 p-2 my-2 mr-2 text-black"
+                    >
+                      {Cah.Cards.text(card)}
+                    </span>
+                  </div>
+                  <%= if @czar == @player_id do %>
+                    <button
+                      class="btn"
+                      phx-click={@player_id == @czar && "pick_cards"}
+                      phx-value-index={index}
+                    >
+                      Pick Cards
+                    </button>
+                  <% end %>
                 </div>
-                <%= if @czar == @player_id do %>
-                  <button
-                    class="btn"
-                    phx-click={@player_id == @czar && "pick_cards"}
-                    phx-value-index={index}
-                  >
-                    Pick Cards
-                  </button>
-                <% end %>
               </div>
             </div>
           <% end %>
 
           <%= if @phase == :submitting and @role != nil do %>
             <% me = get_self(assigns) %>
-            <div class="bg-black h-46 w-72 my-4 p-2 rounded">
-              <h1 class="text-2xl text-white p-2">
-                {Cah.Cards.text(@black_card.id)}
-              </h1>
-            </div>
-
-            <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
-              <ul class="flex gap-4 overflow-x-auto md:overflow-visible md:flex-wrap max-w-full">
-                <li
-                  :for={card <- @hand}
-                  class={["cah-card hover-3d shrink-0", card in @selected && "selected"]}
-                >
-                  <div class={[
-                    "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
-                    (card in @selected && "bg-orange-400") || "bg-white"
-                  ]}>
-                    <%= case card do %>
-                      <% {:blank, n} -> %>
-                        <input
-                          placeholder="Your text here.."
-                          phx-keyup="blank_change"
-                          class="z-100 rounded p-2"
-                          phx-value-n={n}
-                          phx-debounce="300"
-                          value={Map.get(@blank_texts, n, "")}
-                        />
-                      <% _ -> %>
-                        {Cah.Cards.text(card)}
-                    <% end %>
-                    <div
-                      phx-click="select_card"
-                      phx-value-card={Cah.Cards.id(card)}
-                      class="select-none cursor-pointer flex justify-center items-center w-8 h-8 border-2 border-black rounded absolute right-2 bottom-2"
-                    >
-                      {(card in @selected && "x") || ""}
-                    </div>
-                  </div>
-                </li>
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-              </ul>
-              <button
-                :if={length(@selected) == @black_card.picks}
-                class="btn my-4"
-                phx-click="submit_cards"
-              >
-                Submit Selected
-              </button>
-              <div class="tooltip tooltip-right" data-tip="Subtracts one point (unless at zero)">
-                <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
+            <div class="col-span-3 flex flex-col">
+              <div class="bg-black h-46 w-72 my-4 p-2 rounded">
+                <h1 class="text-2xl text-white p-2">
+                  {Cah.Cards.text(@black_card.id)}
+                </h1>
               </div>
-            <% else %>
-              <%= if @player_id == @czar do %>
-                <p class="border border-slate-700 bg-slate-900 p-4 self-center">
-                  Waiting for cards..
-                </p>
+
+              <%= if @player_id != @czar and not (me.submitted or me.discarded) do %>
+                <ul class="flex gap-4 overflow-x-auto md:overflow-visible md:flex-wrap max-w-full">
+                  <li
+                    :for={card <- @hand}
+                    class={["cah-card hover-3d shrink-0", card in @selected && "selected"]}
+                  >
+                    <div class={[
+                      "relative z-90 text-xl h-46 w-72 p-2 rounded-sm text-black",
+                      (card in @selected && "bg-orange-400") || "bg-white"
+                    ]}>
+                      <%= case card do %>
+                        <% {:blank, n} -> %>
+                          <input
+                            placeholder="Your text here.."
+                            phx-keyup="blank_change"
+                            class="z-100 rounded p-2"
+                            phx-value-n={n}
+                            phx-debounce="300"
+                            value={Map.get(@blank_texts, n, "")}
+                          />
+                        <% _ -> %>
+                          {Cah.Cards.text(card)}
+                      <% end %>
+                      <div
+                        phx-click="select_card"
+                        phx-value-card={Cah.Cards.id(card)}
+                        class="select-none cursor-pointer flex justify-center items-center w-8 h-8 border-2 border-black rounded absolute right-2 bottom-2"
+                      >
+                        {(card in @selected && "x") || ""}
+                      </div>
+                    </div>
+                  </li>
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                  <div />
+                </ul>
+                <button
+                  :if={length(@selected) == @black_card.picks}
+                  class="btn my-4"
+                  phx-click="submit_cards"
+                >
+                  Submit Selected
+                </button>
+                <div class="tooltip tooltip-right" data-tip="Subtracts one point (unless at zero)">
+                  <button class="btn my-4" phx-click="discard_cards">Discard Selected</button>
+                </div>
               <% else %>
-                <p class="border border-slate-700 bg-slate-900 p-4 self-center">
-                  Waiting for other players..
-                </p>
+                <%= if @player_id == @czar do %>
+                  <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+                    Waiting for cards..
+                  </p>
+                <% else %>
+                  <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+                    Waiting for other players..
+                  </p>
+                <% end %>
               <% end %>
-            <% end %>
+            </div>
           <% end %>
         <% else %>
           The game is over. The winner is {Enum.max_by(@players, & &1.score).name}.
