@@ -58,7 +58,7 @@ defmodule CahWeb.CahLive do
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <div class="self-center w-full md:w-fit flex flex-col gap-2 rounded p-4 my-2 border border-slate-700 bg-slate-900">
+            <div class="self-center w-full md:w-fit flex flex-col gap-2 rounded p-4 my-2 border border-slate-700 bg-slate-900 m-auto">
               <h1 class="border border-slate-700 text-xl text-center py-4">You're the host.</h1>
               <div class="justify-between flex gap-2">
                 <form class="w-[50%]" phx-submit="start">
