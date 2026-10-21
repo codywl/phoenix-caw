@@ -10,7 +10,8 @@ This is an Elixir/Phoenix implementation of an online Cards Against Humanity gam
 - Relatively easy to extend.
 
 ## Running
-Simply run `mix phx.server` if you want the development server to run. (Of course, you will need Elixir/Mix installed.)
+- Simply run `mix phx.server` if you want the development server to run. (Of course, you will need Elixir/Mix installed.)
+- Alternatively, you can build the Docker container in the repo, and run that.
 
 ## TODO
 ### Features
