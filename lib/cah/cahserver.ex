@@ -417,18 +417,7 @@ defmodule Cah.CahServer do
         if Map.has_key?(state.players, player_id) do
           state = put_in(state, [:players, player_id, :connected], false)
 
-          state =
-            if player_id == state.czar do
-              if state.phase in [:submitting, :judging] do
-                PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
-                broadcast_state(state)
-                next_round(state)
-              else
-                state
-              end
-            else
-              maybe_progress(state)
-            end
+          state = maybe_progress(state)
 
           state = ensure_is_host(state)
 
@@ -452,6 +441,19 @@ defmodule Cah.CahServer do
 
       {_ref, timers} ->
         state = %{state | removal_timers: timers}
+
+        state =
+          if player_id == state.czar do
+            if state.phase in [:submitting, :judging] do
+              PubSub.broadcast(:cah_pubsub, @topic, {:notice, :czar_dropped})
+              broadcast_state(state)
+              next_round(state)
+            else
+              state
+            end
+          else
+            maybe_progress(state)
+          end
 
         state = ensure_is_host(state)
 
@@ -589,10 +591,14 @@ defmodule Cah.CahServer do
   end
 
   defp ensure_is_host(state) do
-    case state.players[state.host] do
-      %{connected: true} -> state
-      _ -> %{state | host: first_connected(state)}
-    end
+    state =
+      case state.players[state.host] do
+        %{connected: true} -> state
+        _ -> %{state | host: first_connected(state)}
+      end
+
+    broadcast_state(state)
+    state
   end
 
   defp do_reset(state) do

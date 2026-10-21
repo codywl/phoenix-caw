@@ -15,11 +15,11 @@ defmodule CahWeb.CahLive do
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&&display=swap"
       rel="stylesheet"
     />
-    <div class="text-white flex flex-col md:flex-row h-screen font-[DM_Sans]">
+    <div data-theme="dark" class="text-white flex flex-col md:flex-row h-screen font-[DM_Sans]">
       <aside class="shadow shadow-4 md:w-64 h-auto md:h-full shrink-0 bg-slate-900 p-4 overflow-y-auto">
         <h2 class="text-lg font-bold mb-2">Players</h2>
 
-        <div class="divider"></div>
+        <div class="divider bg-slate-600 h-0.5 mt-0 rounded"></div>
 
         <ul class="space-y-2">
           <li :for={player <- @players} class="flex items-center gap-2">
@@ -39,10 +39,10 @@ defmodule CahWeb.CahLive do
         </ul>
       </aside>
 
-      <main class="bg-slate-800 flex flex-col items-center md:justify-center md:items-start flex-1 min-w-0 p-6 overflow-y-auto">
+      <main class="bg-slate-800 flex flex-col items-center md:items-start flex-1 min-w-0 p-2 md:p-6 overflow-y-auto">
         <%= if @phase != :ended do %>
           <%= if @role == nil do %>
-            <div class="self-center rounded p-4 border border-slate-700 bg-slate-900">
+            <div class="self-center rounded p-4 border border-slate-700 bg-slate-900 m-auto">
               <h1 class="text-center text-2xl text-bold my-2">Crows Against World</h1>
               <h1 class="text-center text-[100px]">🐦‍⬛</h1>
               <form class="flex gap-1" phx-submit="join">
@@ -58,29 +58,28 @@ defmodule CahWeb.CahLive do
           <% end %>
 
           <%= if @role == :host and @phase == :lobby do %>
-            <div class="self-center w-full md:w-96 flex flex-col rounded p-4 my-2 border border-slate-700 bg-slate-900">
-              <h1 class="text-xl py-4">You're the host.</h1>
-              <div class="divider" />
-              <div class="flex gap-2">
-                <form phx-submit="start">
-                  <.button>Start Game</.button>
+            <div class="self-center w-full md:w-fit flex flex-col gap-2 rounded p-4 my-2 border border-slate-700 bg-slate-900">
+              <h1 class="border border-slate-700 text-xl text-center py-4">You're the host.</h1>
+              <div class="justify-between flex gap-2">
+                <form class="w-[50%]" phx-submit="start">
+                  <.button class="w-full btn">Start Game</.button>
                 </form>
-                <form phx-submit="host_leave">
-                  <.button>Leave Game</.button>
+                <form class="w-[50%]" phx-submit="host_leave">
+                  <.button class="text-nowrap w-full btn">Leave Game</.button>
                 </form>
               </div>
             </div>
           <% end %>
 
           <%= if @role != nil do %>
-            <%= if length(@players) < 3 do %>
-              <p class="self-center">
+            <%= if length(@players) < 3 and @player_id != @host do %>
+              <p class="border border-slate-700 bg-slate-900 p-4 self-center">
                 Waiting for more players..
               </p>
             <% end %>
 
             <%= if length(@players) > 2 and @phase == :lobby do %>
-              <p class="self-center">
+              <p class="border border-slate-700 bg-slate-900 p-4 self-center">
                 Waiting to start..
               </p>
             <% end %>
@@ -180,9 +179,13 @@ defmodule CahWeb.CahLive do
               </div>
             <% else %>
               <%= if @player_id == @czar do %>
-                Waiting for cards..
+                <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+                  Waiting for cards..
+                </p>
               <% else %>
-                Waiting for other players..
+                <p class="border border-slate-700 bg-slate-900 p-4 self-center">
+                  Waiting for other players..
+                </p>
               <% end %>
             <% end %>
           <% end %>
@@ -393,7 +396,8 @@ defmodule CahWeb.CahLive do
        black_card: black_card,
        czar: czar,
        submissions: submissions,
-       target_score: target_score
+       target_score: target_score,
+       host: host
      )}
   end
 
